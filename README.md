@@ -145,6 +145,94 @@ JS-popup при нажатии на слово → показать оригин
 
 Кнопка “Добавить запись” (создать новую запись через бота).
 
+💡 Важно: при переходе на платные API (OpenAI / Google Cloud) стоимость зависит от минут аудио и количества запросов.
+Для MVP и личного дневника достаточно бесплатных лимитов.
+
+🧠 Пример логики коррекции (mock)
+python
+Копировать код
+def mock_correction(text: str):
+    corrected = text.replace("go to park", "went to the park")
+    changes = []
+    if corrected != text:
+        changes.append({
+            "from": "go to park",
+            "to": "went to the park",
+            "rule": "Past Simple",
+            "comment": "Используй прошедшее время."
+        })
+    return {"original": text, "corrected": corrected, "changes": changes}
+🌳 Пример отображения дневной страницы
+vbnet
+Копировать код
+🗓 24 октября 2025
+───────────────────────────────
+🎧 19:43 — запись #1
+✅ Yesterday I went to the park.
+💬 Ошибка: go → went (Past Simple)
+
+🎧 21:10 — запись #2
+✅ I like cooking food.
+───────────────────────────────
+📄 Общий текст за день:
+Yesterday I <span class="error" data-error="go → went" data-comment="Неправильная форма времени">go</span> to the park. 
+I like cooking food.
+───────────────────────────────
+🔮 Возможные расширения
+🎯 Обучение на собственных ошибках (повторение похожих случаев).
+
+📊 Аналитика — типы ошибок по частоте (время, артикли, порядок слов).
+
+🌍 Многоязычность: EN, DE, ES, FR и т.д.
+
+🔔 Напоминания “Запиши фразу сегодня”.
+
+📥 Экспорт дневника в PDF / DOCX.
+
+🧑‍🏫 Интеграция с преподавателем (доступ к дневнику ученика).
+
+🚀 Roadmap (реалистично)
+Неделя	Этап	Результат
+1	Бот + STT (mock)	Базовый приём и транскрибация
+2	DB + mock LLM	Сохранение и обработка
+3	WebApp интерфейс	Просмотр дневников
+4	Popup логика / TTS	Интерактивные фразы
+5	Хостинг на Render	MVP доступен онлайн
+6+	Улучшения и аналитика	Готовый продукт
+
+🔐 Переменные окружения
+env
+Копировать код
+BOT_TOKEN=123456:ABC...
+OPENAI_API_KEY=...
+GEMINI_API_KEY=...
+DATABASE_URL=sqlite:///data/diary.db
+💾 Установка и запуск (локально)
+bash
+Копировать код
+git clone https://github.com/yourusername/ai-voice-diary.git
+cd ai-voice-diary
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn webapp.main:app --reload --host 127.0.0.1 --port 8000
+Проверка доступности:
+- Откройте `http://127.0.0.1:8000/health` — должен вернуть `{"status": "ok"}`
+- Откройте `http://127.0.0.1:8000/` — должен вернуть `{"name": "AI Voice Diary"}`
+
+Примечания:
+- Убедитесь, что зависимости установлены: `pip install -r requirements.txt`
+- Запускайте из корня репозитория, чтобы импорт `webapp.main` был доступен.
+FastAPI + Jinja2 шаблоны или WebApp SDK Telegram.
+
+Главная страница — древо дат (2025 → Октябрь → 24).
+
+Страница дня — исправленный текст с тегами <span class="error" data-error="..." data-comment="...">.
+
+JS-popup при нажатии на слово → показать оригинал, комментарий, правило.
+
+Кнопка “Добавить запись” (создать новую запись через бота).
+
 Фаза D — Улучшения и обучение (2–4 недели)
 Подключить реальный LLM-API для коррекции (Gemini / Qwen / OpenAI).
 
