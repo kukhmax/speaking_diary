@@ -21,6 +21,7 @@ APP_TITLE = "AI Voice Diary"
 DATA_DIR = Path("data")
 UPLOADS_DIR = DATA_DIR / "uploads"
 HF_MODEL_URL = os.getenv("HF_MODEL_URL", "https://api-inference.huggingface.co/models/openai/whisper-base")
+MAX_AUDIO_SIZE_BYTES = int(os.getenv("MAX_AUDIO_SIZE_BYTES", str(25 * 1024 * 1024)))
 
 app = FastAPI(title=f"{APP_TITLE} API")
 app.mount("/static", StaticFiles(directory="webapp/static"), name="static")
@@ -29,7 +30,22 @@ templates = Jinja2Templates(directory="webapp/templates")
 
 def get_db_path() -> Path:
     url = os.getenv("DATABASE_URL")
-    return Path(url) if url else DEFAULT_DB_PATH
+    if not url:
+        return DEFAULT_DB_PATH
+    u = url.strip()
+    # Support sqlite://, sqlite:/// and file:// URIs, as well as plain paths
+    if u.startswith("sqlite:"):
+        u = u[len("sqlite:"):]
+        # remove leading slashes or backslashes (handles sqlite:/// and windows-style)
+        while u.startswith("/") or u.startswith("\\"):
+            u = u[1:]
+        return Path(u) if u else DEFAULT_DB_PATH
+    if u.startswith("file://"):
+        u = u[len("file://") :]
+        while u.startswith("/") or u.startswith("\\"):
+            u = u[1:]
+        return Path(u) if u else DEFAULT_DB_PATH
+    return Path(u)
 
 
 def get_hf_token() -> str | None:
@@ -40,14 +56,16 @@ def get_hf_token() -> str | None:
     )
 
 
-async def transcribe_with_hf(audio_path: Path) -> str:
-    """Transcribe audio using Hugging Face Inference API (Whisper)."""
+async def transcribe_with_hf(audio_path: Path, primary_url: str | None = None) -> str:
+    """Transcribe audio using Hugging Face Inference API (Whisper).
+    Falls back to other Whisper variants on 404, and finally to dummy text if all fail.
+    """
     token = get_hf_token()
     if not token:
         # Fallback to dummy text when no token is configured
         return f"[распознанный текст для {audio_path.name}]"
 
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {token}", "x-wait-for-model": "true"}
     # Best-effort content-type based on file extension
     ext = audio_path.suffix.lower()
     if ext == ".webm":
@@ -61,25 +79,44 @@ async def transcribe_with_hf(audio_path: Path) -> str:
 
     data_bytes = audio_path.read_bytes()
 
-    # Retry on model loading (503)
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120)) as client:
-        for attempt in range(3):
-            resp = await client.post(HF_MODEL_URL, data=data_bytes, headers=headers)
-            if resp.status_code == 200:
-                payload = resp.json()
-                if isinstance(payload, dict):
-                    return payload.get("text") or ""
-                if isinstance(payload, list) and payload and isinstance(payload[0], dict):
-                    return payload[0].get("text") or ""
-                return str(payload)
-            if resp.status_code == 503:
-                # Model is loading, wait and retry
-                await asyncio.sleep(4)
-                continue
-            # Propagate other errors
-            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    # Candidate model URLs: configured first, then safer fallbacks
+    configured = (primary_url or HF_MODEL_URL).strip()
+    candidates = [configured]
+    # Add fallbacks only if configured isn't already one of them
+    for fb in [
+        "https://api-inference.huggingface.co/models/openai/whisper-small",
+        "https://api-inference.huggingface.co/models/openai/whisper-tiny",
+    ]:
+        if fb != configured:
+            candidates.append(fb)
 
-    raise HTTPException(status_code=503, detail="ASR модель загружается, попробуйте позже")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(120)) as client:
+        for model_url in candidates:
+            # Retry on model loading (503)
+            for attempt in range(3):
+                resp = await client.post(model_url, data=data_bytes, headers=headers)
+                if resp.status_code == 200:
+                    payload = resp.json()
+                    if isinstance(payload, dict):
+                        return payload.get("text") or ""
+                    if isinstance(payload, list) and payload and isinstance(payload[0], dict):
+                        return payload[0].get("text") or ""
+                    return str(payload)
+                if resp.status_code == 503:
+                    # Model is loading, wait and retry
+                    await asyncio.sleep(4)
+                    continue
+                if resp.status_code in (401, 403):
+                    # Auth issues should be visible to user; surface them
+                    detail = resp.text or "Unauthorized"
+                    raise HTTPException(status_code=resp.status_code, detail=detail)
+                if resp.status_code == 404:
+                    # Try next candidate model
+                    break
+                # Other errors: try next candidate, then fallback
+                break
+        # If none succeeded, return safe dummy text to keep UI responsive
+        return f"[распознанный текст для {audio_path.name}]"
 
 
 @app.on_event("startup")
@@ -116,13 +153,23 @@ def api_add_entry(payload: dict):
 
 @app.post("/api/transcribe")
 async def api_transcribe(audio: UploadFile = File(...)):
-    # Save uploaded file
+    # Basic validation: extension and size
     filename = audio.filename or f"audio_{int(datetime.utcnow().timestamp())}.webm"
-    save_path = UPLOADS_DIR / filename
+    ext = Path(filename).suffix.lower()
+    if ext not in (".webm", ".wav", ".wave", ".mp3"):
+        raise HTTPException(status_code=400, detail=f"Unsupported audio format: {ext}")
+
     data = await audio.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty audio payload")
+    if len(data) > MAX_AUDIO_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Audio too large")
+
+    # Save uploaded file
+    save_path = UPLOADS_DIR / filename
     with save_path.open("wb") as f:
         f.write(data)
 
-    # Real transcription via HF (falls back to dummy if token missing)
+    # Real transcription via HF (falls back to dummy on persistent errors)
     text = await transcribe_with_hf(save_path)
     return {"text": text}

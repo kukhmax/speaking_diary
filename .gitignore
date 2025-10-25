@@ -18,6 +18,8 @@ __pycache__/
 # Data & cache
 /data/*.db
 /data/audios/
+/data/uploads/
+
 
 # Logs
 *.log
