@@ -32,6 +32,38 @@
   - Появление записи в дереве дат.
   - Отправку аудио и получение текстовой заглушки транскрибации.
 
+# DEV_PROC — Шаг 2: Реальная транскрибация (Hugging Face)
+
+Цель
+- Подключить бесплатный внешний API для распознавания речи и получить реальный текст вместо заглушки.
+
+Реализовано
+- Эндпоинт `POST /api/transcribe` стал `async` и отправляет загруженный аудиофайл на Hugging Face Inference API (Whisper).
+- Конфиг: читаются переменные окружения `HF_API_TOKEN` (а также `HUGGINGFACEHUB_API_TOKEN`, `HUGGINGFACE_API_TOKEN`) и опционально `HF_MODEL_URL` (по умолчанию `https://api-inference.huggingface.co/models/openai/whisper-base`).
+- Надёжность: реализованы ретраи при `503 Model is loading` с короткой паузой.
+- Файлы: аудио сохраняется в `data/uploads/<filename>`.
+- Фронтенд: добавлена обработка ошибок в `app.js` (блокировка кнопки, вывод статуса и текста ошибки при сбое сети/серверного ответа).
+
+Зависимости и конфиг
+- Зависимости уже в проекте: `httpx`, `python-dotenv`.
+- Переменные окружения (Windows PowerShell):
+  - Установить токен на текущую сессию: ``$env:HF_API_TOKEN = "hf_XXXXXXXXXXXXXXXX"``
+  - Установить навсегда: ``setx HF_API_TOKEN "hf_XXXXXXXXXXXXXXXX"`` (перезапустите терминал)
+  - Опционально указать модель: ``$env:HF_MODEL_URL = "https://api-inference.huggingface.co/models/openai/whisper-small"``
+- Можно создать `.env` в корне проекта:
+  ```
+  HF_API_TOKEN=hf_XXXXXXXXXXXXXXXX
+  # HF_MODEL_URL=https://api-inference.huggingface.co/models/openai/whisper-small
+  ```
+
+Проверка
+- UI: открыть `http://127.0.0.1:8000/`, записать → остановить → «Транскрибировать аудио». В поле текста появится результат распознавания.
+- CLI: ``curl.exe -s -F "audio=@<путь_к_файлу>.webm" http://127.0.0.1:8000/api/transcribe`` → ожидается JSON `{"text":"..."}`.
+
 Примечания
-- Путь БД можно изменить через переменную окружения `DATABASE_URL` (по умолчанию `data/diary.sqlite`).
+- Free tier Hugging Face может давать задержку из-за холодного старта (ответ 503); реализованы повторные попытки.
+- При отсутствии токена возвращается безопасная заглушка, чтобы UI оставался рабочим.
+- Следующим шагом можно добавить локальную транскрибацию (Vosk/faster-whisper) и переключение режима в конфиге.
+
+Путь БД можно изменить через переменную окружения `DATABASE_URL` (по умолчанию `data/diary.sqlite`).
 - Папка `.lagacy_diary` не используется.

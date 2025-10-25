@@ -105,15 +105,27 @@ async function transcribe() {
     statusEl.textContent = 'Нет аудио для транскрибации';
     return;
   }
-  const blob = new Blob(recordedChunks, { type: 'audio/webm' });
-  const form = new FormData();
-  const filename = `record_${Date.now()}.webm`;
-  form.append('audio', blob, filename);
-  statusEl.textContent = 'Отправка аудио...';
-  const resp = await fetch('/api/transcribe', { method: 'POST', body: form });
-  const data = await resp.json();
-  textEl.value = data.text || '';
-  statusEl.textContent = 'Транскрибировано';
+  try {
+    btnTranscribe.disabled = true;
+    const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+    const form = new FormData();
+    const filename = `record_${Date.now()}.webm`;
+    form.append('audio', blob, filename);
+    statusEl.textContent = 'Отправка аудио...';
+    const resp = await fetch('/api/transcribe', { method: 'POST', body: form });
+    if (!resp.ok) {
+      const msg = await resp.text();
+      throw new Error(`Сервер вернул ${resp.status}: ${msg}`);
+    }
+    const data = await resp.json();
+    textEl.value = data.text || '';
+    statusEl.textContent = 'Транскрибировано';
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = `Ошибка транскрибации: ${err.message || err}`;
+  } finally {
+    btnTranscribe.disabled = false;
+  }
 }
 
 btnTranscribe.addEventListener('click', transcribe);
