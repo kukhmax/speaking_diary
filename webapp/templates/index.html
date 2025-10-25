@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ app_title }}</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>{{ app_title }}</h1>
+  </header>
+
+  <main class="container">
+    <section class="actions">
+      <button id="btnCreate" class="btn primary">Создать запись</button>
+    </section>
+
+    <section>
+      <h2>Записи</h2>
+      <div id="entries" class="entries"></div>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <button id="modalClose" class="modal-close">×</button>
+      <div class="recording">
+        <button id="btnRecord" class="btn icon">🎙️ Начать запись</button>
+        <button id="btnStop" class="btn" disabled>Остановить</button>
+        <span id="status" class="status">Готово</span>
+      </div>
+      <div class="transcript">
+        <textarea id="text" rows="8" placeholder="Текст записи..." class="text-input"></textarea>
+        <button id="btnTranscribe" class="btn">Транскрибировать аудио</button>
+      </div>
+      <div class="save">
+        <button id="btnSave" class="btn primary">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

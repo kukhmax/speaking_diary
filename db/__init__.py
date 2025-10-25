@@ -1,1 +1,1 @@
-from .storage import init_db, add_entry, list_entries, get_entry, DEFAULT_DB_NAME
+from .storage import DEFAULT_DB_PATH, init_db, add_entry, list_entries, get_entry
