@@ -13,6 +13,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from db import init_db, DEFAULT_DB_PATH, add_entry, list_entries
+import json
+import subprocess
+try:
+    from imageio_ffmpeg import get_ffmpeg_exe
+except Exception:
+    get_ffmpeg_exe = None
+try:
+    from vosk import Model, KaldiRecognizer
+except Exception:
+    Model = None
+    KaldiRecognizer = None
 
 # Load environment variables
 load_dotenv()
@@ -22,6 +33,9 @@ DATA_DIR = Path("data")
 UPLOADS_DIR = DATA_DIR / "uploads"
 HF_MODEL_URL = os.getenv("HF_MODEL_URL", "https://api-inference.huggingface.co/models/openai/whisper-base")
 MAX_AUDIO_SIZE_BYTES = int(os.getenv("MAX_AUDIO_SIZE_BYTES", str(25 * 1024 * 1024)))
+ASR_PROVIDER = os.getenv("ASR_PROVIDER", "hf").lower()
+VOSK_MODEL_PATH = os.getenv("VOSK_MODEL_PATH")
+VOSK_MODEL = None
 
 app = FastAPI(title=f"{APP_TITLE} API")
 app.mount("/static", StaticFiles(directory="webapp/static"), name="static")
@@ -118,6 +132,56 @@ async def transcribe_with_hf(audio_path: Path, primary_url: str | None = None) -
         # If none succeeded, return safe dummy text to keep UI responsive
         return f"[распознанный текст для {audio_path.name}]"
 
+# --- Offline ASR (Vosk) ---
+
+def ensure_wav_16k_mono(src_path: Path) -> Path:
+    """Convert audio to 16kHz mono WAV using ffmpeg; if conversion fails, return original path."""
+    if get_ffmpeg_exe is None:
+        return src_path
+    out_path = src_path.with_name(src_path.stem + "_16k_mono.wav")
+    ffmpeg = get_ffmpeg_exe()
+    cmd = [ffmpeg, "-y", "-i", str(src_path), "-ac", "1", "-ar", "16000", "-f", "wav", str(out_path)]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return out_path
+    except Exception:
+        return src_path
+
+
+def get_vosk_model():
+    global VOSK_MODEL
+    if VOSK_MODEL is None:
+        if not VOSK_MODEL_PATH:
+            raise HTTPException(status_code=500, detail="VOSK_MODEL_PATH is not configured")
+        if Model is None:
+            raise HTTPException(status_code=500, detail="Vosk is not installed")
+        VOSK_MODEL = Model(VOSK_MODEL_PATH)
+    return VOSK_MODEL
+
+
+async def transcribe_with_vosk(audio_path: Path) -> str:
+    wav_path = ensure_wav_16k_mono(audio_path)
+    if KaldiRecognizer is None:
+        raise HTTPException(status_code=500, detail="Vosk is not installed")
+    import wave
+    wf = wave.open(str(wav_path), "rb")
+    rec = KaldiRecognizer(get_vosk_model(), 16000)
+    rec.SetWords(True)
+    try:
+        while True:
+            data = wf.readframes(4000)
+            if len(data) == 0:
+                break
+            rec.AcceptWaveform(data)
+        result = rec.FinalResult()
+    finally:
+        wf.close()
+    try:
+        payload = json.loads(result)
+        return payload.get("text", "")
+    except Exception:
+        return result
+
 
 @app.on_event("startup")
 def startup() -> None:
@@ -171,5 +235,10 @@ async def api_transcribe(audio: UploadFile = File(...)):
         f.write(data)
 
     # Real transcription via HF (falls back to dummy on persistent errors)
-    text = await transcribe_with_hf(save_path)
+    # Choose provider
+    provider = ASR_PROVIDER
+    if provider == "vosk":
+        text = await transcribe_with_vosk(save_path)
+    else:
+        text = await transcribe_with_hf(save_path)
     return {"text": text}
