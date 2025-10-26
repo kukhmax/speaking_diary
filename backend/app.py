@@ -63,14 +63,24 @@ def health_check():
 @app.route('/api/transcribe', methods=['POST'])
 def transcribe_audio():
     try:
+        print(f"[TRANSCRIBE] Request received - Files: {list(request.files.keys())}")
+        print(f"[TRANSCRIBE] Form data: {dict(request.form)}")
+        
         if 'audio' not in request.files:
+            print("[TRANSCRIBE] ERROR: No audio file in request")
             return jsonify({'error': 'No audio file provided'}), 400
         
         audio_file = request.files['audio']
         language = request.form.get('language', 'auto')
         
+        print(f"[TRANSCRIBE] Audio file: {audio_file.filename}, size: {len(audio_file.read())} bytes")
+        audio_file.seek(0)  # Reset file pointer after reading size
+        
         if audio_file.filename == '':
+            print("[TRANSCRIBE] ERROR: Empty filename")
             return jsonify({'error': 'No file selected'}), 400
+        
+        print(f"[TRANSCRIBE] Starting Groq transcription with language: {language}")
         
         # Transcribe with Groq
         transcription = groq_client.audio.transcriptions.create(
@@ -79,12 +89,17 @@ def transcribe_audio():
             language=language if language != 'auto' else None
         )
         
+        print(f"[TRANSCRIBE] Success! Text length: {len(transcription.text)} chars")
+        
         return jsonify({
             'text': transcription.text,
             'language': language
         })
         
     except Exception as e:
+        print(f"[TRANSCRIBE] ERROR: {str(e)}")
+        import traceback
+        print(f"[TRANSCRIBE] Traceback: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/entries', methods=['GET'])
