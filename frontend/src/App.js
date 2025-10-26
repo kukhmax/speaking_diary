@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Trash2 } from 'lucide-react';
 
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
 const DiaryApp = () => {
   const [entries, setEntries] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -128,7 +130,7 @@ const DiaryApp = () => {
       const groqLanguage = languageMap[selectedLanguage] || 'auto';
       formData.append('language', groqLanguage);
       
-      const response = await fetch('http://localhost:5000/api/transcribe', {
+      const response = await fetch(`${API_BASE}/transcribe`, {
         method: 'POST',
         body: formData
       });
