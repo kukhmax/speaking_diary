@@ -409,7 +409,7 @@ const DiaryApp = () => {
   const languages = [
     { code: 'ru-RU', name: 'Русский' },
     { code: 'en-US', name: 'English' },
-    { code: 'pt-BR', name: 'Português' },
+    { code: 'pt-PT', name: 'Português' },
     { code: 'es-ES', name: 'Español' },
     { code: 'pl-PL', name: 'Polski' }
   ];
