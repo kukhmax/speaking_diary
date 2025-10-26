@@ -12,7 +12,18 @@ import threading
 import tempfile
 import subprocess
 
+# Gemini API key configuration
 load_dotenv()
+
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY') or os.getenv('GENAI_API_KEY')
+if genai and GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        print("[REVIEW] Gemini configured")
+    except Exception as _cfg_err:
+        print(f"[REVIEW] Gemini configure error: {_cfg_err}")
+else:
+    print("[REVIEW] WARNING: Gemini API key not found or library unavailable. /api/review will operate in fallback mode.")
 
 # Flask - создаем приложение
 app = Flask(__name__)
@@ -293,6 +304,123 @@ def search_entries():
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
+
+@app.route('/api/review', methods=['POST'])
+def review_entry():
+    try:
+        payload = request.get_json()
+        if not payload or 'text' not in payload:
+            return jsonify({'error': 'Text is required'}), 400
+        text = payload['text']
+        language = payload.get('language', 'unknown')
+
+        result = review_with_gemini(text, language)
+        corrected = result.get('corrected_text', text)
+        is_changed = bool(result.get('changed', corrected.strip() != text.strip()))
+        corrected_html = _highlight_diff(text, corrected) if is_changed else corrected
+        explanations = result.get('explanations', [])
+        explanations_html = '<br>'.join(explanations) if explanations else ''
+
+        return jsonify({
+            'original_text': text,
+            'corrected_text': corrected,
+            'corrected_html': corrected_html,
+            'explanations': explanations,
+            'explanations_html': explanations_html,
+            'is_changed': is_changed,
+            'language': result.get('language', language)
+        })
+    except Exception as e:
+        print(f"[REVIEW] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Helper functions for diff/highlight
+import difflib
+
+def _tokenize(text: str):
+    return re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
+
+
+def _rebuild_with_spaces(tokens):
+    res = []
+    for i, t in enumerate(tokens):
+        res.append(t)
+        if i < len(tokens) - 1:
+            curr_is_word = bool(re.match(r"\w", t, re.UNICODE))
+            next_is_word = bool(re.match(r"\w", tokens[i + 1], re.UNICODE))
+            if curr_is_word and next_is_word:
+                res.append(' ')
+            elif t in ['"', "'"] and next_is_word:
+                res.append(' ')
+            elif curr_is_word and tokens[i + 1] in ['"', "'"]:
+                res.append(' ')
+    return ''.join(res)
+
+
+def _highlight_diff(original: str, corrected: str) -> str:
+    orig_tokens = _tokenize(original)
+    corr_tokens = _tokenize(corrected)
+    sm = difflib.SequenceMatcher(a=orig_tokens, b=corr_tokens)
+    parts = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        segment = corr_tokens[j1:j2]
+        if tag == 'equal':
+            parts.append(_rebuild_with_spaces(segment))
+        elif tag in ('replace', 'insert'):
+            if segment:
+                parts.append('<mark>' + _rebuild_with_spaces(segment) + '</mark>')
+        # delete: skip
+    return ''.join(parts)
+
+
+def _build_review_prompt(text: str, language: str):
+    lang_label = language or 'auto-detected language'
+    return (
+        "You are an expert language tutor. Check the phrase for grammatical and semantic correctness while preserving its original meaning. "
+        "If corrections are needed, provide the corrected version. Respond in pure JSON with keys: "
+        "corrected_text (string), explanations (array of strings), language (string), changed (boolean). "
+        "Only output JSON without markdown or code fences. "
+        f"Language: {lang_label}. Phrase: \"\"\"{text}\"\"\""
+    )
+
+
+def review_with_gemini(text: str, language: str):
+    if not (genai and GEMINI_API_KEY):
+        return {
+            'corrected_text': text,
+            'explanations': ['Проверка недоступна: отсутствует ключ Gemini или библиотека.'],
+            'language': language,
+            'changed': False
+        }
+    try:
+        model = genai.GenerativeModel('gemini-1.5-pro')
+        resp = model.generate_content(_build_review_prompt(text, language))
+        raw = (resp.text or '').strip()
+        # Try to extract JSON
+        start = raw.find('{')
+        end = raw.rfind('}')
+        if start != -1 and end != -1:
+            raw = raw[start:end + 1]
+        data = json.loads(raw)
+        corrected = data.get('corrected_text') or text
+        explanations = data.get('explanations') or []
+        changed = data.get('changed')
+        if changed is None:
+            changed = corrected.strip() != text.strip()
+        return {
+            'corrected_text': corrected,
+            'explanations': explanations,
+            'language': data.get('language') or language,
+            'changed': bool(changed)
+        }
+    except Exception as e:
+        print(f"[REVIEW] Gemini error: {e}")
+        return {
+            'corrected_text': text,
+            'explanations': ['Не удалось выполнить проверку, используем исходный текст.'],
+            'language': language,
+            'changed': False
+        }
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

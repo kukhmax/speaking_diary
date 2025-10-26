@@ -14,12 +14,39 @@ const DiaryApp = () => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [reviewModal, setReviewModal] = useState({ visible: false, data: null });
   
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const audioRef = useRef(null);
   const streamRef = useRef(null);
+
+  // Review & Audio storage helpers
+  const REVIEW_PREFIX = 'entry_review:';
+  const AUDIO_PREFIX = 'entry_audio:';
+  const saveReview = (id, obj) => { try { localStorage.setItem(REVIEW_PREFIX + id, JSON.stringify(obj)); } catch {} };
+  const loadReview = (id) => { try { const s = localStorage.getItem(REVIEW_PREFIX + id); return s ? JSON.parse(s) : null; } catch { return null; } };
+  const blobToDataUrl = (blob) => new Promise((resolve, reject) => { const r = new FileReader(); r.onloadend = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
+  const saveAudio = async (id, blob) => { try { const url = await blobToDataUrl(blob); localStorage.setItem(AUDIO_PREFIX + id, url); } catch {} };
+  const loadAudio = (id) => { try { return localStorage.getItem(AUDIO_PREFIX + id); } catch { return null; } };
+  const migrateLocalData = (oldId, newId) => { try { const r = loadReview(oldId); if (r) saveReview(newId, r); const a = loadAudio(oldId); if (a) localStorage.setItem(AUDIO_PREFIX + newId, a); localStorage.removeItem(REVIEW_PREFIX + oldId); localStorage.removeItem(AUDIO_PREFIX + oldId); } catch {} };
+
+  const openReview = (entry) => {
+    const rev = loadReview(entry.id);
+    const audioUri = loadAudio(entry.id);
+    setReviewModal({
+      visible: true,
+      data: {
+        entryId: entry.id,
+        original: rev?.original_text || entry.text,
+        correctedHtml: rev?.corrected_html || entry.text,
+        explanationsHtml: rev?.explanations_html || '',
+        audioUri
+      }
+    });
+  };
+  const closeReviewModal = () => setReviewModal({ visible: false, data: null });
 
   useEffect(() => {
     loadEntries();
@@ -45,15 +72,22 @@ const DiaryApp = () => {
       const response = await fetch(`${API_BASE}/entries?per_page=50`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const serverEntries = (data.entries || []).map(e => ({
-        id: e.id,
-        text: e.text,
-        timestamp: e.timestamp,
-        language: e.language,
-        duration: e.audio_duration,
-        isOffline: false
-      }));
-      const offlineEntries = getOfflineEntries();
+      const serverEntries = (data.entries || []).map(e => {
+        const rev = loadReview(e.id);
+        return {
+          id: e.id,
+          text: e.text,
+          textHtml: rev?.corrected_html || null,
+          timestamp: e.timestamp,
+          language: e.language,
+          duration: e.audio_duration,
+          isOffline: false
+        };
+      });
+      const offlineEntries = getOfflineEntries().map(e => {
+        const rev = loadReview(e.id);
+        return { ...e, textHtml: rev?.corrected_html || null };
+      });
       const combined = [...serverEntries, ...offlineEntries].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       setEntries(combined);
     } catch (error) {
@@ -81,9 +115,26 @@ const DiaryApp = () => {
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const saved = await response.json();
+        migrateLocalData(item.id, saved.id);
+        // После сохранения на сервере запускаем проверку
+        try {
+          const revResp = await fetch(`${API_BASE}/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: saved.text, language: saved.language })
+          });
+          if (revResp.ok) {
+            const revObj = await revResp.json();
+            saveReview(saved.id, { ...revObj, original_text: saved.text });
+          }
+        } catch (e) {
+          console.error('Review failed during sync:', e);
+        }
+        const rev = loadReview(saved.id);
         const normalized = {
           id: saved.id,
           text: saved.text,
+          textHtml: rev?.corrected_html || null,
           timestamp: saved.timestamp,
           language: saved.language,
           duration: saved.audio_duration,
@@ -257,9 +308,32 @@ const DiaryApp = () => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const saved = await response.json();
+
+      // Проверка и исправление текста через backend
+      try {
+        const revResp = await fetch(`${API_BASE}/review`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: saved.text, language: saved.language })
+        });
+        if (revResp.ok) {
+          const rev = await revResp.json();
+          saveReview(saved.id, { ...rev, original_text: saved.text });
+        }
+      } catch (e) {
+        console.error('Review request failed:', e);
+      }
+
+      // Сохраняем аудио локально под id записи
+      if (audioBlob) {
+        try { await saveAudio(saved.id, audioBlob); } catch {}
+      }
+
+      const rev = loadReview(saved.id);
       const normalized = {
         id: saved.id,
         text: saved.text,
+        textHtml: rev?.corrected_html || null,
         timestamp: saved.timestamp,
         language: saved.language,
         duration: saved.audio_duration,
@@ -273,11 +347,13 @@ const DiaryApp = () => {
       setShowModal(false);
     } catch (error) {
       console.error('Error saving entry:', error);
-      // Fallback: save offline
+      // Fallback: сохраняем офлайн
+      const offlineId = `offline_${Date.now()}`;
       const offlineEntry = {
-        tempId: `offline_${Date.now()}`,
-        id: `offline_${Date.now()}`,
+        tempId: offlineId,
+        id: offlineId,
         text: currentText.trim(),
+        textHtml: null,
         timestamp,
         language: selectedLanguage,
         duration: recordingTime,
@@ -286,6 +362,9 @@ const DiaryApp = () => {
       const offlineEntries = getOfflineEntries();
       setOfflineEntries([offlineEntry, ...offlineEntries]);
       setEntries(prev => [offlineEntry, ...prev]);
+      if (audioBlob) {
+        try { await saveAudio(offlineId, audioBlob); } catch {}
+      }
       alert('Сохранено офлайн. Запись синхронизируется при восстановлении соединения.');
       setShowModal(false);
       setCurrentText('');
@@ -403,7 +482,20 @@ const DiaryApp = () => {
                             </div>
                           )}
                         </div>
-                        <div className="text-purple-100 leading-relaxed">{entry.text}</div>
+                        {entry.textHtml ? (
+                          <div
+                            className="text-purple-100 leading-relaxed cursor-pointer"
+                            onClick={() => openReview(entry)}
+                            dangerouslySetInnerHTML={{ __html: entry.textHtml }}
+                          />
+                        ) : (
+                          <div
+                            className="text-purple-100 leading-relaxed cursor-pointer"
+                            onClick={() => openReview(entry)}
+                          >
+                            {entry.text}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -420,100 +512,119 @@ const DiaryApp = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-purple-200">Новая запись</h2>
-                <button
-                  onClick={() => {
-                    stopRecording();
-                    deleteAudio();
-                    setShowModal(false);
-                  }}
-                  className="text-purple-400 hover:text-purple-300"
-                >
-                  <X size={24} />
-                </button>
+                <button onClick={() => setShowModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
               </div>
 
-              <div className="mb-4">
-                <label className="text-purple-300 text-sm mb-2 block">Язык</label>
-                <select
-                  value={selectedLanguage}
-                  onChange={(e) => setSelectedLanguage(e.target.value)}
-                  disabled={isRecording || audioBlob}
-                  className="w-full bg-slate-700 text-purple-100 rounded-lg px-4 py-2 border border-purple-500/30 focus:outline-none focus:border-purple-500 disabled:opacity-50"
-                >
-                  {languages.map(lang => (
-                    <option key={lang.code} value={lang.code}>{lang.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex justify-center items-center gap-4 mb-6">
-                {!audioBlob ? (
-                  <button
-                    onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isProcessing}
-                    className={`w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-lg ${
-                      isRecording
-                        ? 'bg-red-500 hover:bg-red-600 shadow-red-500/50'
-                        : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-purple-500/50'
-                    } disabled:opacity-50`}
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm text-purple-300 mb-1">Язык</div>
+                  <select
+                    value={selectedLanguage}
+                    onChange={(e) => setSelectedLanguage(e.target.value)}
+                    className="w-full bg-slate-700/50 text-purple-100 rounded-md p-3 border border-purple-500/30"
                   >
-                    {isRecording ? <Square size={40} className="text-white" /> : <Mic size={40} className="text-white" />}
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={playAudio}
-                      disabled={isPlaying}
-                      className="w-16 h-16 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center shadow-lg disabled:opacity-50"
-                    >
-                      <Play size={28} className="text-white ml-1" />
-                    </button>
-                    <button
-                      onClick={deleteAudio}
-                      className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center shadow-lg"
-                    >
-                      <Trash2 size={28} className="text-white" />
-                    </button>
-                  </>
-                )}
-              </div>
+                    {languages.map(l => (
+                      <option key={l.code} value={l.code}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {(isRecording || recordingTime > 0) && (
-                <div className="text-center mb-4">
-                  <div className={`text-2xl font-mono ${isRecording ? 'text-red-400 animate-pulse' : 'text-purple-300'}`}>
-                    {formatTime(recordingTime)}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {isRecording ? (
+                      <button
+                        onClick={stopRecording}
+                        className="px-4 py-2 rounded-md bg-red-600 text-white flex items-center gap-2 hover:bg-red-700"
+                      >
+                        <Square size={18} /> Остановить
+                      </button>
+                    ) : (
+                      <button
+                        onClick={startRecording}
+                        className="px-4 py-2 rounded-md bg-purple-600 text-white flex items-center gap-2 hover:bg-purple-700"
+                      >
+                        <Mic size={18} /> Запись
+                      </button>
+                    )}
+                    <span className="text-purple-300">{formatTime(recordingTime)}</span>
                   </div>
-                  {isRecording && (
-                    <div className="text-sm text-purple-400 mt-1">Идет запись...</div>
+
+                  {audioBlob && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={playAudio}
+                        className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                      >
+                        <Play size={18} /> Прослушать
+                      </button>
+                      <button
+                        onClick={deleteAudio}
+                        className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                      >
+                        <Trash2 size={18} /> Удалить
+                      </button>
+                    </div>
                   )}
                 </div>
-              )}
 
-              {isProcessing && (
-                <div className="text-center text-purple-300 mb-4">
-                  <div className="animate-spin inline-block w-6 h-6 border-4 border-purple-500 border-t-transparent rounded-full mb-2"></div>
-                  <div>Обработка...</div>
+                <div>
+                  <div className="text-sm text-purple-300 mb-1">Текст</div>
+                  <textarea
+                    value={currentText}
+                    onChange={(e) => setCurrentText(e.target.value)}
+                    rows={6}
+                    className="w-full bg-slate-700/50 text-purple-100 rounded-md p-3 border border-purple-500/30"
+                    placeholder="Скажите что-нибудь или введите текст вручную..."
+                  />
                 </div>
-              )}
 
-              <textarea
-                value={currentText}
-                onChange={(e) => setCurrentText(e.target.value)}
-                placeholder="Транскрибированный текст появится здесь..."
-                disabled={isProcessing}
-                className="w-full bg-slate-700 text-purple-100 rounded-lg p-4 border border-purple-500/30 focus:outline-none focus:border-purple-500 min-h-32 mb-4 disabled:opacity-50"
-              />
+                <div className="flex justify-end">
+                  <button
+                    onClick={saveEntry}
+                    disabled={isProcessing || !currentText.trim()}
+                    className="px-4 py-2 rounded-md bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center gap-2 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50"
+                  >
+                    <Save size={18} /> {isProcessing ? 'Сохранение...' : 'Сохранить'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-              <button
-                onClick={saveEntry}
-                disabled={!currentText.trim() || isProcessing}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-600 disabled:to-gray-700 text-white rounded-xl py-3 px-6 flex items-center justify-center gap-2 transition-all shadow-lg disabled:opacity-50"
-              >
-                <Save size={20} />
-                <span className="font-semibold">
-                  {isProcessing ? 'Сохранение...' : 'Сохранить'}
-                </span>
-              </button>
+      {reviewModal.visible && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-purple-200">Проверка и исправления</h2>
+                <button onClick={closeReviewModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm text-purple-300 mb-1">Исходный текст</div>
+                  <div className="text-purple-100 bg-slate-700/50 rounded-md p-3">{reviewModal.data?.original}</div>
+                </div>
+                {reviewModal.data?.audioUri && (
+                  <div>
+                    <div className="text-sm text-purple-300 mb-1">Аудио</div>
+                    <audio controls src={reviewModal.data.audioUri} className="w-full" />
+                  </div>
+                )}
+                <div>
+                  <div className="text-sm text-purple-300 mb-1">Исправленный текст</div>
+                  <div className="text-purple-100 bg-slate-700/50 rounded-md p-3" dangerouslySetInnerHTML={{ __html: reviewModal.data?.correctedHtml || '' }} />
+                </div>
+                {reviewModal.data?.explanationsHtml && (
+                  <div>
+                    <div className="text-sm text-purple-300 mb-1">Пояснения</div>
+                    <div className="prose prose-invert max-w-none">
+                      <div className="text-purple-100" dangerouslySetInnerHTML={{ __html: reviewModal.data.explanationsHtml }} />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
