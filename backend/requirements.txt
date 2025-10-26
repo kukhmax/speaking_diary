@@ -1,8 +1,16 @@
-Flask==3.1.0
-Flask-CORS==5.0.0
-Flask-SQLAlchemy==3.1.1
+# Async Web Framework
+Quart==0.19.8                    # Async Flask
+quart-cors==0.7.0               # CORS для Quart
+
+# Async Database
+SQLAlchemy==2.0.36              # ORM с async поддержкой
+aiosqlite==0.20.0               # Async SQLite
+asyncpg==0.30.0                 # Async PostgreSQL
+
+# APIs
+groq==0.33.0                    # Async Groq
 python-dotenv==1.0.1
-groq==0.33.0
 openai==1.54.4
-gunicorn==23.0.0
-psycopg2-binary==2.9.10
+
+# ASGI Server
+hypercorn==0.17.3               # Async сервер (вместо Gunicorn)
