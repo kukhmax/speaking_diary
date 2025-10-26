@@ -11,6 +11,12 @@ from groq import Groq
 import threading
 import tempfile
 import subprocess
+import re
+import json
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
 
 # Gemini API key configuration
 load_dotenv()

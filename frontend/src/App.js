@@ -518,6 +518,15 @@ const DiaryApp = () => {
               <div className="space-y-4">
                 <div>
                   <div className="text-sm text-purple-300 mb-1">Язык</div>
+                  {(() => {
+                    const currentLang = languages.find(l => l.code === selectedLanguage) || languages[0];
+                    return (
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl">{currentLang.flag}</span>
+                        <span className="text-purple-200">{currentLang.name}</span>
+                      </div>
+                    );
+                  })()}
                   <select
                     value={selectedLanguage}
                     onChange={(e) => setSelectedLanguage(e.target.value)}

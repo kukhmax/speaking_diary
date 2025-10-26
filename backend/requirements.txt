@@ -10,7 +10,7 @@ psycopg2-binary==2.9.7          # PostgreSQL
 groq==0.33.0                    # Groq
 python-dotenv==1.0.0
 openai==1.3.7
-google-generativeai==0.6.1      # Gemini API
+google-generativeai==0.8.5      # Gemini API
 
 # WSGI Server
 gunicorn==21.2.0                # WSGI сервер
