@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from groq import Groq
 import threading
 import tempfile
+import subprocess
 
 load_dotenv()
 
@@ -96,19 +97,39 @@ def transcribe_audio():
             tmp_path = tmp.name
         print(f"[TRANSCRIBE] Temp file created: {tmp_path}")
         
+        # Convert webm/opus to wav 16k mono if needed
+        use_path = tmp_path
+        converted_path = None
         try:
-            with open(tmp_path, 'rb') as f:
+            if (ext.lower() == '.webm') or (audio_file.content_type and 'webm' in audio_file.content_type):
+                converted_path = tempfile.NamedTemporaryFile(delete=False, suffix='.wav').name
+                cmd = ['ffmpeg', '-y', '-i', tmp_path, '-ac', '1', '-ar', '16000', converted_path]
+                print(f"[TRANSCRIBE] Converting webm→wav: {' '.join(cmd)}")
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if res.returncode != 0:
+                    print(f"[TRANSCRIBE] ffmpeg error: {res.stderr}")
+                else:
+                    use_path = converted_path
+                    print(f"[TRANSCRIBE] Conversion OK: {converted_path}")
+        except Exception as conv_err:
+            print(f"[TRANSCRIBE] ffmpeg exception: {conv_err}")
+        
+        try:
+            with open(use_path, 'rb') as f:
                 transcription = groq_client.audio.transcriptions.create(
                     file=f,
                     model="whisper-large-v3",
                     language=language if language != 'auto' else None
                 )
         finally:
-            try:
-                os.remove(tmp_path)
-                print(f"[TRANSCRIBE] Temp file removed: {tmp_path}")
-            except Exception as cleanup_err:
-                print(f"[TRANSCRIBE] Temp file cleanup error: {cleanup_err}")
+            # Clean temp files
+            for p in [tmp_path, converted_path]:
+                if p:
+                    try:
+                        os.remove(p)
+                        print(f"[TRANSCRIBE] Temp file removed: {p}")
+                    except Exception as cleanup_err:
+                        print(f"[TRANSCRIBE] Temp file cleanup error: {cleanup_err}")
         
         print(f"[TRANSCRIBE] Success! Text length: {len(transcription.text)} chars")
         
