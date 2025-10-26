@@ -31,28 +31,85 @@ const DiaryApp = () => {
     };
   }, []);
 
+  // Offline storage helpers
+  const OFFLINE_KEY = 'offline_entries';
+  const getOfflineEntries = () => {
+    try { return JSON.parse(localStorage.getItem(OFFLINE_KEY) || '[]'); } catch { return []; }
+  };
+  const setOfflineEntries = (entries) => {
+    try { localStorage.setItem(OFFLINE_KEY, JSON.stringify(entries)); } catch {}
+  };
+
   const loadEntries = async () => {
     try {
-      const result = await window.storage.list('entry:');
-      if (result && result.keys) {
-        const loadedEntries = await Promise.all(
-          result.keys.map(async (key) => {
-            try {
-              const data = await window.storage.get(key);
-              return data ? JSON.parse(data.value) : null;
-            } catch {
-              return null;
-            }
-          })
-        );
-        setEntries(loadedEntries.filter(e => e !== null).sort((a, b) => 
-          new Date(b.timestamp) - new Date(a.timestamp)
-        ));
-      }
+      const response = await fetch(`${API_BASE}/entries?per_page=50`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const serverEntries = (data.entries || []).map(e => ({
+        id: e.id,
+        text: e.text,
+        timestamp: e.timestamp,
+        language: e.language,
+        duration: e.audio_duration,
+        isOffline: false
+      }));
+      const offlineEntries = getOfflineEntries();
+      const combined = [...serverEntries, ...offlineEntries].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      setEntries(combined);
     } catch (error) {
-      console.log('No entries yet');
+      console.error('Error loading entries:', error);
+      const offlineEntries = getOfflineEntries();
+      setEntries(offlineEntries);
     }
   };
+
+  const syncOfflineEntries = async () => {
+    const offlineEntries = getOfflineEntries();
+    if (!offlineEntries.length) return;
+
+    const remaining = [];
+    for (const item of offlineEntries) {
+      try {
+        const response = await fetch(`${API_BASE}/entries`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: item.text,
+            language: item.language,
+            audio_duration: item.duration
+          })
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const saved = await response.json();
+        const normalized = {
+          id: saved.id,
+          text: saved.text,
+          timestamp: saved.timestamp,
+          language: saved.language,
+          duration: saved.audio_duration,
+          isOffline: false
+        };
+        setEntries(prev => [normalized, ...prev.filter(e => e.id !== item.id)]);
+      } catch (err) {
+        console.error('Sync offline entry failed:', err);
+        remaining.push(item);
+      }
+    }
+    setOfflineEntries(remaining);
+  };
+
+  useEffect(() => {
+    const handleOnline = () => {
+      syncOfflineEntries();
+      loadEntries();
+    };
+    window.addEventListener('online', handleOnline);
+    // Try syncing on mount as well
+    syncOfflineEntries();
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
 
   const startRecording = async () => {
     try {
@@ -185,24 +242,55 @@ const DiaryApp = () => {
 
     setIsProcessing(true);
     const timestamp = new Date().toISOString();
-    const entry = {
-      id: `entry_${Date.now()}`,
-      text: currentText.trim(),
-      timestamp,
-      language: selectedLanguage,
-      duration: recordingTime
-    };
 
     try {
-      await window.storage.set(`entry:${entry.id}`, JSON.stringify(entry));
-      setEntries(prev => [entry, ...prev]);
+      const response = await fetch(`${API_BASE}/entries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: currentText.trim(),
+          language: selectedLanguage,
+          audio_duration: recordingTime
+        })
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const saved = await response.json();
+      const normalized = {
+        id: saved.id,
+        text: saved.text,
+        timestamp: saved.timestamp,
+        language: saved.language,
+        duration: saved.audio_duration,
+        isOffline: false
+      };
+
+      setEntries(prev => [normalized, ...prev]);
       setCurrentText('');
       setAudioBlob(null);
       setRecordingTime(0);
       setShowModal(false);
     } catch (error) {
       console.error('Error saving entry:', error);
-      alert('Ошибка сохранения записи');
+      // Fallback: save offline
+      const offlineEntry = {
+        tempId: `offline_${Date.now()}`,
+        id: `offline_${Date.now()}`,
+        text: currentText.trim(),
+        timestamp,
+        language: selectedLanguage,
+        duration: recordingTime,
+        isOffline: true
+      };
+      const offlineEntries = getOfflineEntries();
+      setOfflineEntries([offlineEntry, ...offlineEntries]);
+      setEntries(prev => [offlineEntry, ...prev]);
+      alert('Сохранено офлайн. Запись синхронизируется при восстановлении соединения.');
+      setShowModal(false);
+      setCurrentText('');
+      setAudioBlob(null);
+      setRecordingTime(0);
     } finally {
       setIsProcessing(false);
     }
@@ -296,11 +384,18 @@ const DiaryApp = () => {
                     {dateEntries.map((entry) => (
                       <div key={entry.id} className="px-4 py-3 hover:bg-purple-500/5">
                         <div className="flex justify-between items-start mb-1">
-                          <div className="text-sm text-purple-400/60">
-                            {new Date(entry.timestamp).toLocaleTimeString('ru-RU', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm text-purple-400/60">
+                              {new Date(entry.timestamp).toLocaleTimeString('ru-RU', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </div>
+                            {entry.isOffline && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                                Офлайн
+                              </span>
+                            )}
                           </div>
                           {entry.duration && (
                             <div className="text-xs text-purple-400/40">
