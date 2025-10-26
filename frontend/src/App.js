@@ -113,26 +113,42 @@ const DiaryApp = () => {
     setCurrentText('Транскрибация...');
 
     try {
-      // В продакшене здесь будет реальный API запрос
-      // const formData = new FormData();
-      // formData.append('audio', blob, 'recording.webm');
-      // formData.append('language', selectedLanguage);
-      // const response = await fetch('http://localhost:5000/api/transcribe', {
-      //   method: 'POST',
-      //   body: formData
-      // });
-      // const data = await response.json();
-      // setCurrentText(data.text);
-
-      // Симуляция для демо
-      setTimeout(() => {
-        setCurrentText('Это демо-версия. Подключите backend для реальной транскрибации через Groq API.');
-        setIsProcessing(false);
-      }, 2000);
+      const formData = new FormData();
+      formData.append('audio', blob, 'recording.webm');
+      
+      // Преобразуем язык из формата браузера в формат Groq
+      const languageMap = {
+        'ru-RU': 'ru',
+        'en-US': 'en',
+        'pt-PT': 'pt',
+        'es-ES': 'es',
+        'pl-PL': 'pl'
+      };
+      
+      const groqLanguage = languageMap[selectedLanguage] || 'auto';
+      formData.append('language', groqLanguage);
+      
+      const response = await fetch('http://localhost:5000/api/transcribe', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      setCurrentText(data.text || 'Транскрибация не удалась');
+      setIsProcessing(false);
 
     } catch (error) {
       console.error('Transcription error:', error);
-      setCurrentText('Ошибка транскрибации. Проверьте подключение к backend.');
+      setCurrentText(`Ошибка транскрибации: ${error.message}. Проверьте подключение к backend и настройки Groq API.`);
       setIsProcessing(false);
     }
   };
