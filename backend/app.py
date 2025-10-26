@@ -73,8 +73,10 @@ def transcribe_audio():
         audio_file = request.files['audio']
         language = request.form.get('language', 'auto')
         
-        print(f"[TRANSCRIBE] Audio file: {audio_file.filename}, size: {len(audio_file.read())} bytes")
-        audio_file.seek(0)  # Reset file pointer after reading size
+        # Read size for logging and reset pointer on underlying stream
+        raw_preview = audio_file.stream.read()
+        print(f"[TRANSCRIBE] Audio file: {audio_file.filename}, size: {len(raw_preview)} bytes, content_type: {audio_file.content_type}")
+        audio_file.stream.seek(0)
         
         if audio_file.filename == '':
             print("[TRANSCRIBE] ERROR: Empty filename")
@@ -82,9 +84,9 @@ def transcribe_audio():
         
         print(f"[TRANSCRIBE] Starting Groq transcription with language: {language}")
         
-        # Transcribe with Groq
+        # Transcribe with Groq using underlying stream file-like object
         transcription = groq_client.audio.transcriptions.create(
-            file=audio_file,
+            file=audio_file.stream,
             model="whisper-large-v3",
             language=language if language != 'auto' else None
         )
