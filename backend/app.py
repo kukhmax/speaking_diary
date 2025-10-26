@@ -68,7 +68,7 @@ def transcribe_audio():
         lang_map = {
             'ru-RU': 'ru',
             'en-US': 'en',
-            'pt-PT': 'pt',
+            'pt-BR': 'pt',
             'es-ES': 'es',
             'pl-PL': 'pl'
         }

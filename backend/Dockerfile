@@ -1,5 +1,6 @@
 # Dockerfile для Backend
-FROM python:3.12-slim
+# Python 3.13 - последняя стабильная версия (октябрь 2024)
+FROM python:3.13-slim
 
 # Установка рабочей директории
 WORKDIR /app
