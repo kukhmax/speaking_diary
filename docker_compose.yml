@@ -28,7 +28,7 @@ services:
     container_name: diary_backend
     restart: always
     environment:
-      DATABASE_URL: postgresql+asyncpg://diary_user:${DB_PASSWORD}@db:5432/diary_db
+      DATABASE_URL: postgresql+psycopg2://diary_user:${DB_PASSWORD:-changeme123}@db:5432/diary_db
       GROQ_API_KEY: ${GROQ_API_KEY}
       FLASK_ENV: production
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
