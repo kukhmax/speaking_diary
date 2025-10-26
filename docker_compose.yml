@@ -27,6 +27,8 @@ services:
       dockerfile: Dockerfile
     container_name: diary_backend
     restart: always
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+psycopg2://diary_user:${DB_PASSWORD:-changeme123}@db:5432/diary_db
       GROQ_API_KEY: ${GROQ_API_KEY}

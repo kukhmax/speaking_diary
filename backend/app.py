@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from groq import Groq
 import threading
+import tempfile
 
 load_dotenv()
 
@@ -82,14 +83,32 @@ def transcribe_audio():
             print("[TRANSCRIBE] ERROR: Empty filename")
             return jsonify({'error': 'No file selected'}), 400
         
+        # Ensure GROQ_API_KEY is present
+        api_key_present = bool(os.getenv('GROQ_API_KEY'))
+        print(f"[TRANSCRIBE] GROQ_API_KEY present: {api_key_present}")
+        
         print(f"[TRANSCRIBE] Starting Groq transcription with language: {language}")
         
-        # Transcribe with Groq using underlying stream file-like object
-        transcription = groq_client.audio.transcriptions.create(
-            file=audio_file.stream,
-            model="whisper-large-v3",
-            language=language if language != 'auto' else None
-        )
+        # Write to a temporary file with correct extension for Groq
+        ext = os.path.splitext(audio_file.filename)[1] or '.webm'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(raw_preview)
+            tmp_path = tmp.name
+        print(f"[TRANSCRIBE] Temp file created: {tmp_path}")
+        
+        try:
+            with open(tmp_path, 'rb') as f:
+                transcription = groq_client.audio.transcriptions.create(
+                    file=f,
+                    model="whisper-large-v3",
+                    language=language if language != 'auto' else None
+                )
+        finally:
+            try:
+                os.remove(tmp_path)
+                print(f"[TRANSCRIBE] Temp file removed: {tmp_path}")
+            except Exception as cleanup_err:
+                print(f"[TRANSCRIBE] Temp file cleanup error: {cleanup_err}")
         
         print(f"[TRANSCRIBE] Success! Text length: {len(transcription.text)} chars")
         
