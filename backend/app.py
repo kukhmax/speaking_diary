@@ -314,7 +314,7 @@ def search_entries():
 @app.route('/api/review', methods=['POST'])
 def review_entry():
     try:
-        payload = request.get_json()
+        payload = request.get_json(silent=True) or {}
         if not payload or 'text' not in payload:
             return jsonify({'error': 'Text is required'}), 400
         text = payload['text']
@@ -399,26 +399,36 @@ def review_with_gemini(text: str, language: str):
             'changed': False
         }
     try:
-        model = genai.GenerativeModel('gemini-1.5-pro')
-        resp = model.generate_content(_build_review_prompt(text, language))
-        raw = (resp.text or '').strip()
-        # Try to extract JSON
-        start = raw.find('{')
-        end = raw.rfind('}')
-        if start != -1 and end != -1:
-            raw = raw[start:end + 1]
-        data = json.loads(raw)
-        corrected = data.get('corrected_text') or text
-        explanations = data.get('explanations') or []
-        changed = data.get('changed')
-        if changed is None:
-            changed = corrected.strip() != text.strip()
-        return {
-            'corrected_text': corrected,
-            'explanations': explanations,
-            'language': data.get('language') or language,
-            'changed': bool(changed)
-        }
+        model_candidates = ['gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-2.5-flash-latest', 'gemini-2.5-flash']
+        last_err = None
+        for model_name in model_candidates:
+            try:
+                model = genai.GenerativeModel(model_name)
+                resp = model.generate_content(_build_review_prompt(text, language))
+                raw = (getattr(resp, 'text', '') or '').strip()
+                # Try to extract JSON
+                start = raw.find('{')
+                end = raw.rfind('}')
+                if start != -1 and end != -1:
+                    raw = raw[start:end + 1]
+                data = json.loads(raw)
+                corrected = data.get('corrected_text') or text
+                explanations = data.get('explanations') or []
+                changed = data.get('changed')
+                if changed is None:
+                    changed = corrected.strip() != text.strip()
+                return {
+                    'corrected_text': corrected,
+                    'explanations': explanations,
+                    'language': data.get('language') or language,
+                    'changed': bool(changed)
+                }
+            except Exception as e:
+                last_err = e
+                print(f"[REVIEW] Gemini model {model_name} error: {e}")
+                continue
+        # If all candidates failed, raise last error to hit the outer fallback
+        raise last_err or Exception("Gemini failed for all candidate models")
     except Exception as e:
         print(f"[REVIEW] Gemini error: {e}")
         return {

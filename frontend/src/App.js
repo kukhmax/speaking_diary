@@ -407,11 +407,11 @@ const DiaryApp = () => {
 
   const groupedEntries = groupEntriesByDate();
   const languages = [
-    { code: 'ru-RU', name: 'Русский', flag: '🇷🇺' },
-    { code: 'en-US', name: 'English', flag: '🇺🇸' },
-    { code: 'pt-PT', name: 'Português', flag: '🇵🇹' },
-    { code: 'es-ES', name: 'Español', flag: '🇪🇸' },
-    { code: 'pl-PL', name: 'Polski', flag: '🇵🇱' }
+    { code: 'ru-RU', name: 'Русский', flagSrc: '/flags/ru.svg' },
+    { code: 'en-US', name: 'English', flagSrc: '/flags/us.svg' },
+    { code: 'pt-PT', name: 'Português', flagSrc: '/flags/pt.svg' },
+    { code: 'es-ES', name: 'Español', flagSrc: '/flags/es.svg' },
+    { code: 'pl-PL', name: 'Polski', flagSrc: '/flags/pl.svg' }
   ];
 
   return (
@@ -522,7 +522,7 @@ const DiaryApp = () => {
                     const currentLang = languages.find(l => l.code === selectedLanguage) || languages[0];
                     return (
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xl">{currentLang.flag}</span>
+                        <img src={currentLang.flagSrc} alt={currentLang.name} className="h-5 w-7 rounded-sm border border-purple-500/30" />
                         <span className="text-purple-200">{currentLang.name}</span>
                       </div>
                     );
@@ -533,7 +533,7 @@ const DiaryApp = () => {
                     className="w-full bg-slate-700/50 text-purple-100 rounded-md p-3 border border-purple-500/30"
                   >
                     {languages.map(l => (
-                      <option key={l.code} value={l.code}>{`${l.flag} ${l.name}`}</option>
+                      <option key={l.code} value={l.code}>{l.name}</option>
                     ))}
                   </select>
                 </div>

@@ -173,6 +173,44 @@ diary-app/
 
 ---
 
+## 🆕 Новый функционал
+
+### 1) Проверка и исправление текста (Gemini)
+- Backend добавляет надёжный фолбэк на доступные модели: `gemini-1.5-pro(-latest)` → `gemini-1.5-flash(-latest)`.
+- Если ни одна модель недоступна, вернётся исходный текст и пояснение.
+- Требуется переменная окружения `GEMINI_API_KEY` (поддерживаются также `GOOGLE_API_KEY`/`GENAI_API_KEY`).
+
+Как пользоваться:
+- В UI: после сохранения записи backend автоматически вызывает `/api/review`. Откройте запись — появится модальное окно «Проверка и исправления» с исправленным текстом и пояснениями.
+- Через API (Windows PowerShell):
+  - `Invoke-RestMethod -Uri http://localhost:5000/api/review -Method Post -ContentType "application/json" -Body '{"text":"I want to teach English.","language":"en-US"}'`
+- Через API (Linux/Mac):
+  - `curl -s -X POST http://localhost:5000/api/review -H "Content-Type: application/json" -d '{"text":"I want to teach English.","language":"en-US"}'`
+
+Ответ содержит поля: `original_text`, `corrected_text`, `corrected_html`, `explanations`, `explanations_html`, `is_changed`, `language`.
+
+Технологии:
+- `google-generativeai==0.8.5` (Gemini API)
+- Flask (`/api/review`), JSON-парсинг с `request.get_json(silent=True)`
+
+### 2) Флаги языков в UI (SVG)
+- Эмодзи флаги заменены на SVG-иконки для стабильного отображения.
+- Файлы: `frontend/public/flags/ru.svg`, `us.svg`, `pt.svg`, `es.svg`, `pl.svg`.
+- В `frontend/src/App.js` массив языков теперь: `{ code, name, flagSrc }`, иконка отображается как `<img src={flagSrc} />`.
+
+Как добавить новый язык:
+- Положите SVG в `frontend/public/flags/<код>.svg`.
+- Добавьте запись в массив `languages`:
+  - `{ code: 'de-DE', name: 'Deutsch', flagSrc: '/flags/de.svg' }`
+
+Технологии:
+- React 18 + Tailwind CSS
+- SVG-иконки в `public/flags`
+
+### 3) Улучшения сборки и иконок
+- `frontend/public/manifest.json`: удалены отсутствующие `logo192.png` и `logo512.png`, оставлен только `favicon.ico`.
+- `frontend/public/index.html`: ссылка на иконку заменена на `favicon.ico`.
+
 ## 🔧 Установка и настройка
 
 ### Шаг 1: Установите Docker
