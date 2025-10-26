@@ -407,11 +407,11 @@ const DiaryApp = () => {
 
   const groupedEntries = groupEntriesByDate();
   const languages = [
-    { code: 'ru-RU', name: 'Русский' },
-    { code: 'en-US', name: 'English' },
-    { code: 'pt-PT', name: 'Português' },
-    { code: 'es-ES', name: 'Español' },
-    { code: 'pl-PL', name: 'Polski' }
+    { code: 'ru-RU', name: 'Русский', flag: '🇷🇺' },
+    { code: 'en-US', name: 'English', flag: '🇺🇸' },
+    { code: 'pt-PT', name: 'Português', flag: '🇵🇹' },
+    { code: 'es-ES', name: 'Español', flag: '🇪🇸' },
+    { code: 'pl-PL', name: 'Polski', flag: '🇵🇱' }
   ];
 
   return (
@@ -524,7 +524,7 @@ const DiaryApp = () => {
                     className="w-full bg-slate-700/50 text-purple-100 rounded-md p-3 border border-purple-500/30"
                   >
                     {languages.map(l => (
-                      <option key={l.code} value={l.code}>{l.name}</option>
+                      <option key={l.code} value={l.code}>{`${l.flag} ${l.name}`}</option>
                     ))}
                   </select>
                 </div>
