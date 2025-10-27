@@ -10,6 +10,11 @@ psycopg2-binary==2.9.7          # PostgreSQL
 groq==0.33.0                    # Groq
 python-dotenv==1.0.0
 openai==1.3.7
+google-generativeai==0.8.5      # Gemini API
 
 # WSGI Server
 gunicorn==21.2.0                # WSGI сервер
+ 
+# Text-to-Speech
+gTTS==2.5.1                     # Server-side TTS synthesis
+edge-tts==7.1.0                 # Microsoft Edge TTS (fixes token/WS issues)

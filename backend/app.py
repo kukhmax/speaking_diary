@@ -11,8 +11,36 @@ from groq import Groq
 import threading
 import tempfile
 import subprocess
+import re
+import json
+import base64
+import io
+import asyncio
+try:
+    import google.generativeai as genai
+except Exception:
+    genai = None
+try:
+    from gtts import gTTS
+except Exception:
+    gTTS = None
+try:
+    import edge_tts
+except Exception:
+    edge_tts = None
 
+# Gemini API key configuration
 load_dotenv()
+
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY') or os.getenv('GENAI_API_KEY')
+if genai and GEMINI_API_KEY:
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        print("[REVIEW] Gemini configured")
+    except Exception as _cfg_err:
+        print(f"[REVIEW] Gemini configure error: {_cfg_err}")
+else:
+    print("[REVIEW] WARNING: Gemini API key not found or library unavailable. /api/review will operate in fallback mode.")
 
 # Flask - создаем приложение
 app = Flask(__name__)
@@ -293,6 +321,354 @@ def search_entries():
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
+
+@app.route('/api/review', methods=['POST'])
+def review_entry():
+    try:
+        payload = request.get_json(silent=True) or {}
+        if not payload or 'text' not in payload:
+            return jsonify({'error': 'Text is required'}), 400
+        text = payload['text']
+        language = payload.get('language', 'unknown')
+        ui_language = payload.get('ui_language', 'ru')
+
+        result = review_with_gemini(text, language, ui_language)
+        corrected = result.get('corrected_text', text)
+        is_changed = bool(result.get('changed', corrected.strip() != text.strip()))
+        corrected_html = _highlight_diff(text, corrected) if is_changed else corrected
+        explanations = result.get('explanations', [])
+        explanations_html = '<br>'.join(explanations) if explanations else ''
+        # Server-side TTS for corrected phrase
+        tts_data_url = synthesize_tts(corrected, result.get('language', language))
+
+        return jsonify({
+            'original_text': text,
+            'corrected_text': corrected,
+            'corrected_html': corrected_html,
+            'explanations': explanations,
+            'explanations_html': explanations_html,
+            'is_changed': is_changed,
+            'language': result.get('language', language),
+            'tts_audio_data_url': tts_data_url
+        })
+    except Exception as e:
+        print(f"[REVIEW] ERROR: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Helper functions for diff/highlight
+import difflib
+
+def _tokenize(text: str):
+    return re.findall(r"\w+|[^\w\s]", text, re.UNICODE)
+
+
+def _rebuild_with_spaces(tokens):
+    res = []
+    for i, t in enumerate(tokens):
+        res.append(t)
+        if i < len(tokens) - 1:
+            curr_is_word = bool(re.match(r"\w", t, re.UNICODE))
+            next_is_word = bool(re.match(r"\w", tokens[i + 1], re.UNICODE))
+            if curr_is_word and next_is_word:
+                res.append(' ')
+            elif t in ['"', "'"] and next_is_word:
+                res.append(' ')
+            elif curr_is_word and tokens[i + 1] in ['"', "'"]:
+                res.append(' ')
+    return ''.join(res)
+
+
+def _highlight_diff(original: str, corrected: str) -> str:
+    orig_tokens = _tokenize(original)
+    corr_tokens = _tokenize(corrected)
+    sm = difflib.SequenceMatcher(a=orig_tokens, b=corr_tokens)
+    parts = []
+    prev_last_token = None
+
+    def _needs_space(prev_tok, next_tok):
+        if not prev_tok or not next_tok:
+            return False
+        prev_is_word = bool(re.match(r"\w", prev_tok, re.UNICODE))
+        next_is_word = bool(re.match(r"\w", next_tok, re.UNICODE))
+        if prev_is_word and next_is_word:
+            return True
+        if prev_tok in ['"', "'"] and next_is_word:
+            return True
+        if prev_is_word and next_tok in ['"', "'"]:
+            return True
+        return False
+
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        segment = corr_tokens[j1:j2]
+        first_tok = segment[0] if segment else None
+        if _needs_space(prev_last_token, first_tok):
+            parts.append(' ')
+        if tag == 'equal':
+            parts.append(_rebuild_with_spaces(segment))
+        elif tag in ('replace', 'insert'):
+            if segment:
+                parts.append('<mark>' + _rebuild_with_spaces(segment) + '</mark>')
+        if segment:
+            prev_last_token = segment[-1]
+    return ''.join(parts)
+
+
+def _map_tts_lang(language: str) -> str:
+    l = (language or '').lower()
+    if l.startswith('ru'):
+        return 'ru'
+    if l.startswith('en'):
+        return 'en'
+    if l.startswith('pt'):
+        return 'pt'
+    if l.startswith('es'):
+        return 'es'
+    if l.startswith('pl'):
+        return 'pl'
+    return 'en'
+
+
+def synthesize_tts(text: str, language: str):
+    """Return data URL (audio/mpeg) synthesized from text or None if unavailable."""
+    if not text:
+        return None
+
+    # --- Edge TTS mapping for Portuguese (prefer pt-PT) ---
+    def _edge_pt_config(lang_id: str):
+        l = (lang_id or '').lower()
+        mapping = {
+            'pt': {
+                'voice': 'pt-PT-RaquelNeural',
+                'backup': ['pt-PT-DuarteNeural']
+            },
+            'pt-pt': {
+                'voice': 'pt-PT-RaquelNeural',
+                'backup': ['pt-PT-DuarteNeural']
+            },
+            'pt-br': {
+                'voice': 'pt-BR-FranciscaNeural',
+                'backup': ['pt-BR-AntonioNeural']
+            },
+        }
+        if l in mapping:
+            return mapping[l]
+        base = l.split('-')[0]
+        if base in mapping:
+            return mapping[base]
+        return mapping['pt']
+
+    # --- Generic Edge TTS mapping for other languages ---
+    def _edge_voice_config(lang_id: str):
+        l = (lang_id or '').lower()
+        mapping = {
+            # Russian
+            'ru': {
+                'voice': 'ru-RU-DmitryNeural',
+                'backup': ['ru-RU-SvetlanaNeural']
+            },
+            'ru-ru': {
+                'voice': 'ru-RU-DmitryNeural',
+                'backup': ['ru-RU-SvetlanaNeural']
+            },
+            # English (US/GB)
+            'en': {
+                'voice': 'en-US-GuyNeural',
+                'backup': ['en-US-JennyNeural', 'en-GB-RyanNeural']
+            },
+            'en-us': {
+                'voice': 'en-US-GuyNeural',
+                'backup': ['en-US-JennyNeural']
+            },
+            'en-gb': {
+                'voice': 'en-GB-RyanNeural',
+                'backup': ['en-GB-LibbyNeural']
+            },
+            # Spanish (Spain)
+            'es': {
+                'voice': 'es-ES-AlvaroNeural',
+                'backup': ['es-ES-ElviraNeural']
+            },
+            'es-es': {
+                'voice': 'es-ES-AlvaroNeural',
+                'backup': ['es-ES-ElviraNeural']
+            },
+            # Polish
+            'pl': {
+                'voice': 'pl-PL-MarekNeural',
+                'backup': ['pl-PL-ZofiaNeural']
+            },
+            'pl-pl': {
+                'voice': 'pl-PL-MarekNeural',
+                'backup': ['pl-PL-ZofiaNeural']
+            },
+        }
+        if l in mapping:
+            return mapping[l]
+        base = l.split('-')[0]
+        if base in mapping:
+            return mapping[base]
+        return None
+
+    # Prefer Edge TTS for Portuguese to ensure European accent
+    lang_lower = (language or '').lower()
+    if edge_tts is not None and lang_lower.startswith('pt'):
+        try:
+            cfg = _edge_pt_config(lang_lower)
+            primary_voice = os.getenv('EDGE_TTS_PT_VOICE', cfg['voice'])
+
+            async def _stream_voice(v):
+                communicate = edge_tts.Communicate(text, voice=v)
+                audio_bytes = b''
+                async for chunk in communicate.stream():
+                    if chunk.get('type') == 'audio':
+                        audio_bytes += chunk.get('data', b'')
+                return audio_bytes
+
+            # Try primary voice
+            try:
+                data = asyncio.run(_stream_voice(primary_voice))
+                b64 = base64.b64encode(data).decode('ascii')
+                return f"data:audio/mpeg;base64,{b64}"
+            except Exception as e1:
+                print(f"[TTS] EDGE-TTS primary voice failed: {e1}")
+
+            # Try backups
+            for bv in (cfg.get('backup') or []):
+                try:
+                    data = asyncio.run(_stream_voice(bv))
+                    b64 = base64.b64encode(data).decode('ascii')
+                    return f"data:audio/mpeg;base64,{b64}"
+                except Exception as e2:
+                    print(f"[TTS] EDGE-TTS backup voice '{bv}' failed: {e2}")
+
+            # If we reached here, Edge TTS failed for Portuguese
+            _allow_pt_fallback = (os.getenv('ALLOW_PT_GTTs_FALLBACK', 'false').strip().lower() in ('1','true','yes','on'))
+            if _allow_pt_fallback:
+                print("[TTS] EDGE-TTS failed for Portuguese; ALLOW_PT_GTTs_FALLBACK=true → falling back to gTTS (pt)")
+                # Do not return here; continue to generic gTTS fallback section below
+            else:
+                print("[TTS] EDGE-TTS failed for Portuguese; skipping gTTS to avoid wrong accent")
+                return None
+        except Exception as e:
+            print(f"[TTS] EDGE-TTS ERROR (Portuguese branch): {e}")
+
+    # Try Edge TTS for other languages using mapping; if fails, continue to gTTS fallback
+    if edge_tts is not None and not lang_lower.startswith('pt'):
+        try:
+            cfg_other = _edge_voice_config(lang_lower)
+            if cfg_other:
+                primary_voice_other = os.getenv('EDGE_TTS_VOICE', cfg_other['voice'])
+
+                async def _stream_voice_other(v):
+                    communicate = edge_tts.Communicate(text, voice=v)
+                    audio_bytes = b''
+                    async for chunk in communicate.stream():
+                        if chunk.get('type') == 'audio':
+                            audio_bytes += chunk.get('data', b'')
+                    return audio_bytes
+
+                # Try primary voice
+                try:
+                    data = asyncio.run(_stream_voice_other(primary_voice_other))
+                    b64 = base64.b64encode(data).decode('ascii')
+                    return f"data:audio/mpeg;base64,{b64}"
+                except Exception as e1:
+                    print(f"[TTS] EDGE-TTS primary voice failed (generic): {e1}")
+
+                # Try backups
+                for bv in (cfg_other.get('backup') or []):
+                    try:
+                        data = asyncio.run(_stream_voice_other(bv))
+                        b64 = base64.b64encode(data).decode('ascii')
+                        return f"data:audio/mpeg;base64,{b64}"
+                    except Exception as e2:
+                        print(f"[TTS] EDGE-TTS backup voice '{bv}' failed (generic): {e2}")
+        except Exception as e:
+            print(f"[TTS] EDGE-TTS ERROR (generic branch): {e}")
+
+    # Fallback: gTTS for other languages (and optionally for pt-PT if ALLOW_PT_GTTs_FALLBACK enabled)
+    if gTTS is None:
+        print("[TTS] WARNING: gTTS library unavailable, skipping synthesis")
+        return None
+    try:
+        _allow_pt_fallback = (os.getenv('ALLOW_PT_GTTs_FALLBACK', 'false').strip().lower() in ('1','true','yes','on'))
+        # Avoid using gTTS for Portuguese unless explicitly allowed
+        if (language or '').lower().startswith('pt') and not _allow_pt_fallback:
+            return None
+        # gTTS поддерживает только общий 'pt', без акцентных различий
+        if (language or '').lower().startswith('pt') and _allow_pt_fallback:
+            lang_code = 'pt'
+        else:
+            lang_code = _map_tts_lang(language)
+        buf = io.BytesIO()
+        gTTS(text=text, lang=lang_code).write_to_fp(buf)
+        data = buf.getvalue()
+        b64 = base64.b64encode(data).decode('ascii')
+        return f"data:audio/mpeg;base64,{b64}"
+    except Exception as e:
+        print(f"[TTS] ERROR: {e}")
+        return None
+
+
+def _build_review_prompt(text: str, language: str, ui_language: str = 'ru'):
+    lang_label = language or 'auto'
+    ui_label = (ui_language or 'ru').lower()
+    return (
+        "Ты опытный преподаватель иностранного языка. Проверь фразу на грамматическую и смысловую корректность, сохраняя исходный смысл. "
+        "Если нужны исправления — предоставь исправленный вариант. Ответь строго одним JSON-объектом без Markdown и без пояснений вне JSON. "
+        "Используй ключи: corrected_text (string), explanations (array of strings — пиши пояснения на языке интерфейса), language (string — код языка исходного текста), changed (boolean). "
+        "Если исправлений нет, верни corrected_text равным исходному тексту и changed=false. "
+        f"Язык интерфейса: {ui_label}. Язык фразы: {lang_label}. Фраза: \"\"\"{text}\"\"\""
+    )
+
+
+def review_with_gemini(text: str, language: str, ui_language: str = 'ru'):
+    if not (genai and GEMINI_API_KEY):
+        return {
+            'corrected_text': text,
+            'explanations': ['Проверка недоступна: отсутствует ключ Gemini или библиотека.'],
+            'language': language,
+            'changed': False
+        }
+    try:
+        model_candidates = ['gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-2.5-flash-latest', 'gemini-2.5-flash']
+        last_err = None
+        for model_name in model_candidates:
+            try:
+                model = genai.GenerativeModel(model_name)
+                resp = model.generate_content(_build_review_prompt(text, language, ui_language))
+                raw = (getattr(resp, 'text', '') or '').strip()
+                # Try to extract JSON
+                start = raw.find('{')
+                end = raw.rfind('}')
+                if start != -1 and end != -1:
+                    raw = raw[start:end + 1]
+                data = json.loads(raw)
+                corrected = data.get('corrected_text') or text
+                explanations = data.get('explanations') or []
+                changed = data.get('changed')
+                if changed is None:
+                    changed = corrected.strip() != text.strip()
+                return {
+                    'corrected_text': corrected,
+                    'explanations': explanations,
+                    'language': data.get('language') or language,
+                    'changed': bool(changed)
+                }
+            except Exception as e:
+                last_err = e
+                print(f"[REVIEW] Gemini model {model_name} error: {e}")
+                continue
+        # If all candidates failed, raise last error to hit the outer fallback
+        raise last_err or Exception("Gemini failed for all candidate models")
+    except Exception as e:
+        print(f"[REVIEW] Gemini error: {e}")
+        return {
+            'corrected_text': text,
+            'explanations': ['Не удалось выполнить проверку, используем исходный текст.'],
+            'language': language,
+            'changed': False
+        }
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -152,6 +152,16 @@ curl -X POST http://localhost:5000/api/transcribe \
 
 # Поиск
 curl "http://localhost:5000/api/search?q=тест"
+
+# Проверка и исправление + серверная озвучка (TTS)
+# Linux/macOS
+curl -s -X POST http://localhost:5000/api/review \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Hola, qué tal","language":"es-ES"}'
+
+# Windows PowerShell (устойчиво к юникоду)
+$body = @{ text = "Привет, как дела?"; language = "ru-RU" } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5000/api/review -Method Post -ContentType "application/json" -Body $body
 ```
 
 ## 🔧 Переменные окружения
@@ -161,6 +171,11 @@ curl "http://localhost:5000/api/search?q=тест"
 DB_PASSWORD=your_password
 GROQ_API_KEY=gsk_your_key
 SECRET_KEY=your_secret
+
+# ===== TTS (optional) =====
+# EDGE_TTS_VOICE=
+# EDGE_TTS_PT_VOICE=
+ALLOW_PT_GTTs_FALLBACK=false
 ```
 
 ## 📊 Полезные SQL запросы

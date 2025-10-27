@@ -279,6 +279,14 @@ PGADMIN_PASSWORD=admin_password_123
 
 # API URL для фронтенда (по умолчанию - localhost)
 REACT_APP_API_URL=http://localhost:5000/api
+
+# Переопределения голосов Edge TTS (серверная озвучка)
+# EDGE_TTS_VOICE=
+# EDGE_TTS_PT_VOICE=
+
+# Разрешить фоллбэк на gTTS для португальского (pt-PT)
+# ВНИМАНИЕ: gTTS 'pt' использует бразильский акцент
+ALLOW_PT_GTTs_FALLBACK=false
 ```
 
 #### 6.3 Генерация безопасных паролей
@@ -373,6 +381,17 @@ docker-compose logs --tail=50
 
 # Ctrl+C для выхода из просмотра логов
 ```
+
+#### 7.5 Серверная озвучка (TTS)
+
+- Эндпоинт `/api/review` проверяет текст (Gemini — при наличии ключа) и синтезирует аудио через Edge TTS (приоритет) или gTTS (фоллбэк).
+- Для португальского (`pt-PT`) фоллбэк на gTTS отключён по умолчанию — включите `ALLOW_PT_GTTs_FALLBACK=true`, если устраивает бразильский акцент.
+- Пример запроса (Windows PowerShell, устойчиво к юникоду):
+```powershell
+$body = @{ text = "Hola, qué tal"; language = "es-ES" } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:5000/api/review -Method Post -ContentType "application/json" -Body $body
+```
+- Если `tts_audio_data_url` не вернулся, используйте на фронтенде «Speak (browser)» и убедитесь, что в OS установлены системные голоса нужного языка (иначе браузер может озвучивать по умолчанию на `en-US`).
 
 ---
 
