@@ -17,4 +17,4 @@ gunicorn==21.2.0                # WSGI сервер
  
 # Text-to-Speech
 gTTS==2.5.1                     # Server-side TTS synthesis
-edge-tts==6.1.9                 # Microsoft Edge TTS (voices incl. pt-PT)
+edge-tts==7.1.0                 # Microsoft Edge TTS (fixes token/WS issues)

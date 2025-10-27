@@ -193,7 +193,33 @@ diary-app/
 - `google-generativeai==0.8.5` (Gemini API)
 - Flask (`/api/review`), JSON-парсинг с `request.get_json(silent=True)`
 
-### 2) Флаги языков в UI (SVG)
+### 2) Озвучивание (TTS) на сервере: Edge TTS + gTTS
+- Сервер озвучивает исправленную фразу из `/api/review` и возвращает `tts_audio_data_url` (формат `data:audio/mpeg;base64,...`).
+- Приоритет: сначала Microsoft Edge TTS, затем фоллбэк на gTTS (если доступен и разрешён правилами языка).
+- Языковые правила:
+  - `pt-PT`/`pt`: предпочтение европейскому акценту через Edge TTS; фоллбэк на gTTS для португальского отключён по умолчанию (акцент может быть бразильский).
+  - `ru`, `en`, `es`, `pl`: Edge TTS (первичный/резервный голос), затем фоллбэк на gTTS.
+- Переменные окружения:
+  - `EDGE_TTS_VOICE` — переопределение основного голоса для языков `ru/en/es/pl`.
+  - `EDGE_TTS_PT_VOICE` — переопределение голоса для португальского (`pt-PT`/`pt-BR`).
+  - `ALLOW_PT_GTTs_FALLBACK` — если `true/1/on/yes`, разрешает фоллбэк на gTTS для португальского (по умолчанию `false`).
+- Обработка ошибок:
+  - Если Edge TTS возвращает 403/сетевую ошибку, выполняется попытка резервных голосов.
+  - При полном отказе (и если разрешён фоллбэк) — используется gTTS.
+  - Если серверная озвучка недоступна, на фронтенде будет доступна кнопка «Speak (browser)» (Web Speech API). Установите системные голоса OS для нужного языка, иначе браузер может озвучивать по умолчанию на `en-US`.
+
+Примеры запросов:
+- Linux/macOS:
+  - `curl -s -X POST http://localhost:5000/api/review -H "Content-Type: application/json" -d '{"text":"Hola, qué tal","language":"es-ES"}'`
+- Windows PowerShell (устойчиво к юникоду):
+  - `$body = @{ text = "Привет, как дела?"; language = "ru-RU" } | ConvertTo-Json`
+  - `Invoke-RestMethod -Uri http://localhost:5000/api/review -Method Post -ContentType "application/json" -Body $body`
+
+Технологии:
+- `edge-tts==7.1.0` — обновлено для стабильной работы с Edge Read Aloud.
+- `gTTS==2.5.1` — фоллбэк синтеза речи.
+
+### 3) Флаги языков в UI (SVG)
 - Эмодзи флаги заменены на SVG-иконки для стабильного отображения.
 - Файлы: `frontend/public/flags/ru.svg`, `us.svg`, `pt.svg`, `es.svg`, `pl.svg`.
 - В `frontend/src/App.js` массив языков теперь: `{ code, name, flagSrc }`, иконка отображается как `<img src={flagSrc} />`.
@@ -207,7 +233,7 @@ diary-app/
 - React 18 + Tailwind CSS
 - SVG-иконки в `public/flags`
 
-### 3) Улучшения сборки и иконок
+### 4) Улучшения сборки и иконок
 - `frontend/public/manifest.json`: удалены отсутствующие `logo192.png` и `logo512.png`, оставлен только `favicon.ico`.
 - `frontend/public/index.html`: ссылка на иконку заменена на `favicon.ico`.
 
@@ -256,6 +282,15 @@ DB_PASSWORD=измените_этот_пароль
 
 # Flask Secret Key
 SECRET_KEY=используйте_случайную_строку
+
+# ===== TTS (опционально) =====
+# Переопределения голосов Edge TTS
+# EDGE_TTS_VOICE=
+# EDGE_TTS_PT_VOICE=
+
+# Разрешить фоллбэк на gTTS для португальского (pt-PT)
+# ВНИМАНИЕ: gTTS 'pt' использует бразильский акцент
+ALLOW_PT_GTTs_FALLBACK=false
 ```
 
 ### Шаг 4: Запустите приложение

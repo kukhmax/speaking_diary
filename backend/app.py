@@ -432,29 +432,174 @@ def synthesize_tts(text: str, language: str):
     """Return data URL (audio/mpeg) synthesized from text or None if unavailable."""
     if not text:
         return None
-    # Prefer Edge TTS for European Portuguese
-    try:
-        lang_lower = (language or '').lower()
-        if edge_tts is not None and lang_lower.startswith('pt'):
-            voice = os.getenv('EDGE_TTS_PT_VOICE', 'pt-PT-RaquelNeural')
-            async def _run():
-                communicate = edge_tts.Communicate(text, voice=voice)
+
+    # --- Edge TTS mapping for Portuguese (prefer pt-PT) ---
+    def _edge_pt_config(lang_id: str):
+        l = (lang_id or '').lower()
+        mapping = {
+            'pt': {
+                'voice': 'pt-PT-RaquelNeural',
+                'backup': ['pt-PT-DuarteNeural']
+            },
+            'pt-pt': {
+                'voice': 'pt-PT-RaquelNeural',
+                'backup': ['pt-PT-DuarteNeural']
+            },
+            'pt-br': {
+                'voice': 'pt-BR-FranciscaNeural',
+                'backup': ['pt-BR-AntonioNeural']
+            },
+        }
+        if l in mapping:
+            return mapping[l]
+        base = l.split('-')[0]
+        if base in mapping:
+            return mapping[base]
+        return mapping['pt']
+
+    # --- Generic Edge TTS mapping for other languages ---
+    def _edge_voice_config(lang_id: str):
+        l = (lang_id or '').lower()
+        mapping = {
+            # Russian
+            'ru': {
+                'voice': 'ru-RU-DmitryNeural',
+                'backup': ['ru-RU-SvetlanaNeural']
+            },
+            'ru-ru': {
+                'voice': 'ru-RU-DmitryNeural',
+                'backup': ['ru-RU-SvetlanaNeural']
+            },
+            # English (US/GB)
+            'en': {
+                'voice': 'en-US-GuyNeural',
+                'backup': ['en-US-JennyNeural', 'en-GB-RyanNeural']
+            },
+            'en-us': {
+                'voice': 'en-US-GuyNeural',
+                'backup': ['en-US-JennyNeural']
+            },
+            'en-gb': {
+                'voice': 'en-GB-RyanNeural',
+                'backup': ['en-GB-LibbyNeural']
+            },
+            # Spanish (Spain)
+            'es': {
+                'voice': 'es-ES-AlvaroNeural',
+                'backup': ['es-ES-ElviraNeural']
+            },
+            'es-es': {
+                'voice': 'es-ES-AlvaroNeural',
+                'backup': ['es-ES-ElviraNeural']
+            },
+            # Polish
+            'pl': {
+                'voice': 'pl-PL-MarekNeural',
+                'backup': ['pl-PL-ZofiaNeural']
+            },
+            'pl-pl': {
+                'voice': 'pl-PL-MarekNeural',
+                'backup': ['pl-PL-ZofiaNeural']
+            },
+        }
+        if l in mapping:
+            return mapping[l]
+        base = l.split('-')[0]
+        if base in mapping:
+            return mapping[base]
+        return None
+
+    # Prefer Edge TTS for Portuguese to ensure European accent
+    lang_lower = (language or '').lower()
+    if edge_tts is not None and lang_lower.startswith('pt'):
+        try:
+            cfg = _edge_pt_config(lang_lower)
+            primary_voice = os.getenv('EDGE_TTS_PT_VOICE', cfg['voice'])
+
+            async def _stream_voice(v):
+                communicate = edge_tts.Communicate(text, voice=v)
                 audio_bytes = b''
                 async for chunk in communicate.stream():
                     if chunk.get('type') == 'audio':
                         audio_bytes += chunk.get('data', b'')
                 return audio_bytes
-            data = asyncio.run(_run())
-            b64 = base64.b64encode(data).decode('ascii')
-            return f"data:audio/mpeg;base64,{b64}"
-    except Exception as e:
-        print(f"[TTS] EDGE-TTS ERROR: {e}. Falling back to gTTS.")
-    # Fallback: gTTS for other languages or if Edge TTS fails
+
+            # Try primary voice
+            try:
+                data = asyncio.run(_stream_voice(primary_voice))
+                b64 = base64.b64encode(data).decode('ascii')
+                return f"data:audio/mpeg;base64,{b64}"
+            except Exception as e1:
+                print(f"[TTS] EDGE-TTS primary voice failed: {e1}")
+
+            # Try backups
+            for bv in (cfg.get('backup') or []):
+                try:
+                    data = asyncio.run(_stream_voice(bv))
+                    b64 = base64.b64encode(data).decode('ascii')
+                    return f"data:audio/mpeg;base64,{b64}"
+                except Exception as e2:
+                    print(f"[TTS] EDGE-TTS backup voice '{bv}' failed: {e2}")
+
+            # If we reached here, Edge TTS failed for Portuguese
+            _allow_pt_fallback = (os.getenv('ALLOW_PT_GTTs_FALLBACK', 'false').strip().lower() in ('1','true','yes','on'))
+            if _allow_pt_fallback:
+                print("[TTS] EDGE-TTS failed for Portuguese; ALLOW_PT_GTTs_FALLBACK=true → falling back to gTTS (pt)")
+                # Do not return here; continue to generic gTTS fallback section below
+            else:
+                print("[TTS] EDGE-TTS failed for Portuguese; skipping gTTS to avoid wrong accent")
+                return None
+        except Exception as e:
+            print(f"[TTS] EDGE-TTS ERROR (Portuguese branch): {e}")
+
+    # Try Edge TTS for other languages using mapping; if fails, continue to gTTS fallback
+    if edge_tts is not None and not lang_lower.startswith('pt'):
+        try:
+            cfg_other = _edge_voice_config(lang_lower)
+            if cfg_other:
+                primary_voice_other = os.getenv('EDGE_TTS_VOICE', cfg_other['voice'])
+
+                async def _stream_voice_other(v):
+                    communicate = edge_tts.Communicate(text, voice=v)
+                    audio_bytes = b''
+                    async for chunk in communicate.stream():
+                        if chunk.get('type') == 'audio':
+                            audio_bytes += chunk.get('data', b'')
+                    return audio_bytes
+
+                # Try primary voice
+                try:
+                    data = asyncio.run(_stream_voice_other(primary_voice_other))
+                    b64 = base64.b64encode(data).decode('ascii')
+                    return f"data:audio/mpeg;base64,{b64}"
+                except Exception as e1:
+                    print(f"[TTS] EDGE-TTS primary voice failed (generic): {e1}")
+
+                # Try backups
+                for bv in (cfg_other.get('backup') or []):
+                    try:
+                        data = asyncio.run(_stream_voice_other(bv))
+                        b64 = base64.b64encode(data).decode('ascii')
+                        return f"data:audio/mpeg;base64,{b64}"
+                    except Exception as e2:
+                        print(f"[TTS] EDGE-TTS backup voice '{bv}' failed (generic): {e2}")
+        except Exception as e:
+            print(f"[TTS] EDGE-TTS ERROR (generic branch): {e}")
+
+    # Fallback: gTTS for other languages (and optionally for pt-PT if ALLOW_PT_GTTs_FALLBACK enabled)
     if gTTS is None:
         print("[TTS] WARNING: gTTS library unavailable, skipping synthesis")
         return None
     try:
-        lang_code = _map_tts_lang(language)
+        _allow_pt_fallback = (os.getenv('ALLOW_PT_GTTs_FALLBACK', 'false').strip().lower() in ('1','true','yes','on'))
+        # Avoid using gTTS for Portuguese unless explicitly allowed
+        if (language or '').lower().startswith('pt') and not _allow_pt_fallback:
+            return None
+        # gTTS поддерживает только общий 'pt', без акцентных различий
+        if (language or '').lower().startswith('pt') and _allow_pt_fallback:
+            lang_code = 'pt'
+        else:
+            lang_code = _map_tts_lang(language)
         buf = io.BytesIO()
         gTTS(text=text, lang=lang_code).write_to_fp(buf)
         data = buf.getvalue()

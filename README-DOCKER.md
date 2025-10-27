@@ -129,6 +129,15 @@ PGADMIN_PASSWORD=admin_password_123
 
 # Frontend API URL
 REACT_APP_API_URL=http://localhost:5000/api
+
+# ===== TTS (optional) =====
+# Edge TTS voice overrides (опционально)
+# EDGE_TTS_VOICE=
+# EDGE_TTS_PT_VOICE=
+
+# Разрешить фоллбэк на gTTS для португальского (pt-PT)
+# ВНИМАНИЕ: gTTS 'pt' использует бразильский акцент
+ALLOW_PT_GTTs_FALLBACK=false
 ```
 
 ### Шаг 4: Получение Groq API Key
@@ -159,6 +168,11 @@ docker-compose logs -f frontend
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:5000
 - pgAdmin (если запущен): http://localhost:5050
+
+#### Серверная озвучка (TTS)
+- Backend `/api/review` возвращает `tts_audio_data_url`, если удалось синтезировать аудио через Edge TTS или gTTS.
+- Для стабильной работы Edge TTS используется `edge-tts==7.1.0`.
+- Для `pt-PT` по умолчанию отключён фоллбэк на gTTS — включите через `ALLOW_PT_GTTs_FALLBACK=true`, если вас устраивает бразильский акцент.
 
 ### Шаг 6: Остановка приложения
 
