@@ -13,10 +13,21 @@ import tempfile
 import subprocess
 import re
 import json
+import base64
+import io
+import asyncio
 try:
     import google.generativeai as genai
 except Exception:
     genai = None
+try:
+    from gtts import gTTS
+except Exception:
+    gTTS = None
+try:
+    import edge_tts
+except Exception:
+    edge_tts = None
 
 # Gemini API key configuration
 load_dotenv()
@@ -319,13 +330,16 @@ def review_entry():
             return jsonify({'error': 'Text is required'}), 400
         text = payload['text']
         language = payload.get('language', 'unknown')
+        ui_language = payload.get('ui_language', 'ru')
 
-        result = review_with_gemini(text, language)
+        result = review_with_gemini(text, language, ui_language)
         corrected = result.get('corrected_text', text)
         is_changed = bool(result.get('changed', corrected.strip() != text.strip()))
         corrected_html = _highlight_diff(text, corrected) if is_changed else corrected
         explanations = result.get('explanations', [])
         explanations_html = '<br>'.join(explanations) if explanations else ''
+        # Server-side TTS for corrected phrase
+        tts_data_url = synthesize_tts(corrected, result.get('language', language))
 
         return jsonify({
             'original_text': text,
@@ -334,7 +348,8 @@ def review_entry():
             'explanations': explanations,
             'explanations_html': explanations_html,
             'is_changed': is_changed,
-            'language': result.get('language', language)
+            'language': result.get('language', language),
+            'tts_audio_data_url': tts_data_url
         })
     except Exception as e:
         print(f"[REVIEW] ERROR: {e}")
@@ -368,29 +383,101 @@ def _highlight_diff(original: str, corrected: str) -> str:
     corr_tokens = _tokenize(corrected)
     sm = difflib.SequenceMatcher(a=orig_tokens, b=corr_tokens)
     parts = []
+    prev_last_token = None
+
+    def _needs_space(prev_tok, next_tok):
+        if not prev_tok or not next_tok:
+            return False
+        prev_is_word = bool(re.match(r"\w", prev_tok, re.UNICODE))
+        next_is_word = bool(re.match(r"\w", next_tok, re.UNICODE))
+        if prev_is_word and next_is_word:
+            return True
+        if prev_tok in ['"', "'"] and next_is_word:
+            return True
+        if prev_is_word and next_tok in ['"', "'"]:
+            return True
+        return False
+
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
         segment = corr_tokens[j1:j2]
+        first_tok = segment[0] if segment else None
+        if _needs_space(prev_last_token, first_tok):
+            parts.append(' ')
         if tag == 'equal':
             parts.append(_rebuild_with_spaces(segment))
         elif tag in ('replace', 'insert'):
             if segment:
                 parts.append('<mark>' + _rebuild_with_spaces(segment) + '</mark>')
-        # delete: skip
+        if segment:
+            prev_last_token = segment[-1]
     return ''.join(parts)
 
 
-def _build_review_prompt(text: str, language: str):
-    lang_label = language or 'auto-detected language'
+def _map_tts_lang(language: str) -> str:
+    l = (language or '').lower()
+    if l.startswith('ru'):
+        return 'ru'
+    if l.startswith('en'):
+        return 'en'
+    if l.startswith('pt'):
+        return 'pt'
+    if l.startswith('es'):
+        return 'es'
+    if l.startswith('pl'):
+        return 'pl'
+    return 'en'
+
+
+def synthesize_tts(text: str, language: str):
+    """Return data URL (audio/mpeg) synthesized from text or None if unavailable."""
+    if not text:
+        return None
+    # Prefer Edge TTS for European Portuguese
+    try:
+        lang_lower = (language or '').lower()
+        if edge_tts is not None and lang_lower.startswith('pt'):
+            voice = os.getenv('EDGE_TTS_PT_VOICE', 'pt-PT-RaquelNeural')
+            async def _run():
+                communicate = edge_tts.Communicate(text, voice=voice)
+                audio_bytes = b''
+                async for chunk in communicate.stream():
+                    if chunk.get('type') == 'audio':
+                        audio_bytes += chunk.get('data', b'')
+                return audio_bytes
+            data = asyncio.run(_run())
+            b64 = base64.b64encode(data).decode('ascii')
+            return f"data:audio/mpeg;base64,{b64}"
+    except Exception as e:
+        print(f"[TTS] EDGE-TTS ERROR: {e}. Falling back to gTTS.")
+    # Fallback: gTTS for other languages or if Edge TTS fails
+    if gTTS is None:
+        print("[TTS] WARNING: gTTS library unavailable, skipping synthesis")
+        return None
+    try:
+        lang_code = _map_tts_lang(language)
+        buf = io.BytesIO()
+        gTTS(text=text, lang=lang_code).write_to_fp(buf)
+        data = buf.getvalue()
+        b64 = base64.b64encode(data).decode('ascii')
+        return f"data:audio/mpeg;base64,{b64}"
+    except Exception as e:
+        print(f"[TTS] ERROR: {e}")
+        return None
+
+
+def _build_review_prompt(text: str, language: str, ui_language: str = 'ru'):
+    lang_label = language or 'auto'
+    ui_label = (ui_language or 'ru').lower()
     return (
-        "You are an expert language tutor. Check the phrase for grammatical and semantic correctness while preserving its original meaning. "
-        "If corrections are needed, provide the corrected version. Respond in pure JSON with keys: "
-        "corrected_text (string), explanations (array of strings), language (string), changed (boolean). "
-        "Only output JSON without markdown or code fences. "
-        f"Language: {lang_label}. Phrase: \"\"\"{text}\"\"\""
+        "Ты опытный преподаватель иностранного языка. Проверь фразу на грамматическую и смысловую корректность, сохраняя исходный смысл. "
+        "Если нужны исправления — предоставь исправленный вариант. Ответь строго одним JSON-объектом без Markdown и без пояснений вне JSON. "
+        "Используй ключи: corrected_text (string), explanations (array of strings — пиши пояснения на языке интерфейса), language (string — код языка исходного текста), changed (boolean). "
+        "Если исправлений нет, верни corrected_text равным исходному тексту и changed=false. "
+        f"Язык интерфейса: {ui_label}. Язык фразы: {lang_label}. Фраза: \"\"\"{text}\"\"\""
     )
 
 
-def review_with_gemini(text: str, language: str):
+def review_with_gemini(text: str, language: str, ui_language: str = 'ru'):
     if not (genai and GEMINI_API_KEY):
         return {
             'corrected_text': text,
@@ -404,7 +491,7 @@ def review_with_gemini(text: str, language: str):
         for model_name in model_candidates:
             try:
                 model = genai.GenerativeModel(model_name)
-                resp = model.generate_content(_build_review_prompt(text, language))
+                resp = model.generate_content(_build_review_prompt(text, language, ui_language))
                 raw = (getattr(resp, 'text', '') or '').strip()
                 # Try to extract JSON
                 start = raw.find('{')

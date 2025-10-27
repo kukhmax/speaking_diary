@@ -15,6 +15,7 @@ const DiaryApp = () => {
   const [audioBlob, setAudioBlob] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [reviewModal, setReviewModal] = useState({ visible: false, data: null });
+  const UI_LANGUAGE = 'ru';
   
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -30,6 +31,95 @@ const DiaryApp = () => {
   const blobToDataUrl = (blob) => new Promise((resolve, reject) => { const r = new FileReader(); r.onloadend = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
   const saveAudio = async (id, blob) => { try { const url = await blobToDataUrl(blob); localStorage.setItem(AUDIO_PREFIX + id, url); } catch {} };
   const loadAudio = (id) => { try { return localStorage.getItem(AUDIO_PREFIX + id); } catch { return null; } };
+  const fixHtmlSpaces = (html) => {
+    if (!html) return html;
+    try {
+      return html
+        .replace(/([\p{L}\p{N}])<mark/gu, '$1 <mark')
+        .replace(/<\/mark>([\p{L}\p{N}])/gu, '</mark> $1');
+    } catch {
+      return html;
+    }
+  };
+  const removeReview = (id) => { try { localStorage.removeItem(REVIEW_PREFIX + id); } catch {} };
+  const removeAudio = (id) => { try { localStorage.removeItem(AUDIO_PREFIX + id); } catch {} };
+  const normalizeSpeechLang = (lang) => {
+    const lower = (lang || '').toLowerCase();
+    if (lower.startsWith('ru')) return 'ru-RU';
+    if (lower.startsWith('pt')) return 'pt-PT';
+    if (lower.startsWith('es')) return 'es-ES';
+    if (lower.startsWith('pl')) return 'pl-PL';
+    if (lower.startsWith('en')) return 'en-US';
+    return lang || 'en-US';
+  };
+  const ensureVoices = () => new Promise((resolve) => {
+    const list = window.speechSynthesis.getVoices();
+    if (list && list.length) return resolve(list);
+    const handler = () => {
+      const ready = window.speechSynthesis.getVoices();
+      window.speechSynthesis.removeEventListener('voiceschanged', handler);
+      resolve(ready || []);
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', handler);
+  });
+  const pickVoice = (voices, lang) => {
+    const base = (lang || '').toLowerCase().split('-')[0];
+    const exact = voices.find(v => (v.lang || '').toLowerCase() === (lang || '').toLowerCase());
+    if (exact) return exact;
+    const byBase = voices.find(v => (v.lang || '').toLowerCase().startsWith(base));
+    if (byBase) return byBase;
+    const byName = voices.find(v => /ru|russian|русский|pt|portuguese|português|es|spanish|español|pl|polish|polski/i.test(v.name || ''));
+    return byName || null;
+  };
+  const speakText = async (text, lang) => {
+    const useLang = normalizeSpeechLang(lang);
+    const utter = new SpeechSynthesisUtterance(text);
+    try {
+      const voices = await ensureVoices();
+      const v = pickVoice(voices, useLang);
+      if (v) {
+        utter.voice = v;
+        utter.lang = v.lang || useLang;
+      } else {
+        // Fallback: не блокировать воспроизведение, используем системный голос
+        utter.lang = 'en-US';
+      }
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    } catch (e) {
+      console.error('TTS error:', e);
+      window.speechSynthesis.cancel();
+      utter.lang = 'en-US';
+      window.speechSynthesis.speak(utter);
+    }
+  };
+
+  const getFlagSrc = (code) => {
+    const lower = (code || '').toLowerCase();
+    const match = languages.find(l => l.code.toLowerCase() === lower || l.code.toLowerCase().startsWith(lower.split('-')[0]));
+    return (match && match.flagSrc) || '/flags/us.svg';
+  };
+
+  const handleDeleteEntry = async (entry) => {
+    try {
+      if (entry.isOffline) {
+        const filtered = getOfflineEntries().filter(e => e.id !== entry.id);
+        setOfflineEntries(filtered);
+        removeReview(entry.id);
+        removeAudio(entry.id);
+        setEntries(prev => prev.filter(e => e.id !== entry.id));
+        return;
+      }
+      const resp = await fetch(`${API_BASE}/entries/${entry.id}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      removeReview(entry.id);
+      removeAudio(entry.id);
+      setEntries(prev => prev.filter(e => e.id !== entry.id));
+    } catch (err) {
+      console.error('Delete entry failed:', err);
+      alert('Не удалось удалить запись. Проверьте соединение.');
+    }
+  };
   const migrateLocalData = (oldId, newId) => { try { const r = loadReview(oldId); if (r) saveReview(newId, r); const a = loadAudio(oldId); if (a) localStorage.setItem(AUDIO_PREFIX + newId, a); localStorage.removeItem(REVIEW_PREFIX + oldId); localStorage.removeItem(AUDIO_PREFIX + oldId); } catch {} };
 
   const openReview = (entry) => {
@@ -40,9 +130,12 @@ const DiaryApp = () => {
       data: {
         entryId: entry.id,
         original: rev?.original_text || entry.text,
-        correctedHtml: rev?.corrected_html || entry.text,
+        correctedHtml: fixHtmlSpaces(rev?.corrected_html) || entry.text,
+        correctedText: rev?.corrected_text || entry.text,
         explanationsHtml: rev?.explanations_html || '',
-        audioUri
+        audioUri,
+        ttsUri: rev?.tts_audio_data_url || null,
+        language: rev?.language || entry.language
       }
     });
   };
@@ -77,7 +170,7 @@ const DiaryApp = () => {
         return {
           id: e.id,
           text: e.text,
-          textHtml: rev?.corrected_html || null,
+          textHtml: fixHtmlSpaces(rev?.corrected_html) || null,
           timestamp: e.timestamp,
           language: e.language,
           duration: e.audio_duration,
@@ -86,7 +179,7 @@ const DiaryApp = () => {
       });
       const offlineEntries = getOfflineEntries().map(e => {
         const rev = loadReview(e.id);
-        return { ...e, textHtml: rev?.corrected_html || null };
+        return { ...e, textHtml: fixHtmlSpaces(rev?.corrected_html) || null };
       });
       const combined = [...serverEntries, ...offlineEntries].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       setEntries(combined);
@@ -121,7 +214,7 @@ const DiaryApp = () => {
           const revResp = await fetch(`${API_BASE}/review`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: saved.text, language: saved.language })
+            body: JSON.stringify({ text: saved.text, language: saved.language, ui_language: UI_LANGUAGE })
           });
           if (revResp.ok) {
             const revObj = await revResp.json();
@@ -314,7 +407,7 @@ const DiaryApp = () => {
         const revResp = await fetch(`${API_BASE}/review`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: saved.text, language: saved.language })
+          body: JSON.stringify({ text: saved.text, language: saved.language, ui_language: UI_LANGUAGE })
         });
         if (revResp.ok) {
           const rev = await revResp.json();
@@ -333,7 +426,7 @@ const DiaryApp = () => {
       const normalized = {
         id: saved.id,
         text: saved.text,
-        textHtml: rev?.corrected_html || null,
+        textHtml: fixHtmlSpaces(rev?.corrected_html) || null,
         timestamp: saved.timestamp,
         language: saved.language,
         duration: saved.audio_duration,
@@ -476,26 +569,38 @@ const DiaryApp = () => {
                               </span>
                             )}
                           </div>
-                          {entry.duration && (
-                            <div className="text-xs text-purple-400/40">
-                              {formatTime(entry.duration)}
+                          <div className="flex items-center gap-3">
+                            {entry.duration && (
+                              <div className="text-xs text-purple-400/40">
+                                {formatTime(entry.duration)}
+                              </div>
+                            )}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }}
+                              className="text-purple-400 hover:text-pink-300"
+                              aria-label="Удалить запись"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <img src={getFlagSrc(entry.language)} alt={entry.language} className="h-4 w-6 rounded-sm border border-purple-500/30 mt-1" />
+                          {entry.textHtml ? (
+                            <div
+                              className="text-purple-100 leading-relaxed cursor-pointer"
+                              onClick={() => openReview(entry)}
+                              dangerouslySetInnerHTML={{ __html: entry.textHtml }}
+                            />
+                          ) : (
+                            <div
+                              className="text-purple-100 leading-relaxed cursor-pointer"
+                              onClick={() => openReview(entry)}
+                            >
+                              {entry.text}
                             </div>
                           )}
                         </div>
-                        {entry.textHtml ? (
-                          <div
-                            className="text-purple-100 leading-relaxed cursor-pointer"
-                            onClick={() => openReview(entry)}
-                            dangerouslySetInnerHTML={{ __html: entry.textHtml }}
-                          />
-                        ) : (
-                          <div
-                            className="text-purple-100 leading-relaxed cursor-pointer"
-                            onClick={() => openReview(entry)}
-                          >
-                            {entry.text}
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -622,7 +727,25 @@ const DiaryApp = () => {
                   </div>
                 )}
                 <div>
-                  <div className="text-sm text-purple-300 mb-1">Исправленный текст</div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="text-sm text-purple-300">Исправленный текст</div>
+                    {!reviewModal.data?.ttsUri && (
+                      <button onClick={() => {
+                      const text = reviewModal.data?.correctedText || reviewModal.data?.original || '';
+                      if (!text) return;
+                      const lang = reviewModal.data?.language || selectedLanguage;
+                      speakText(text, lang);
+                      }} className="text-purple-300 hover:text-purple-200 flex items-center gap-1">
+                        <Play size={16} /> Озвучить (браузер)
+                      </button>
+                    )}
+                  </div>
+                  {reviewModal.data?.ttsUri && (
+                    <div className="mb-2">
+                      <div className="text-sm text-purple-300 mb-1">Озвучка (синтез на сервере)</div>
+                      <audio controls src={reviewModal.data.ttsUri} className="w-full" />
+                    </div>
+                  )}
                   <div className="text-purple-100 bg-slate-700/50 rounded-md p-3" dangerouslySetInnerHTML={{ __html: reviewModal.data?.correctedHtml || '' }} />
                 </div>
                 {reviewModal.data?.explanationsHtml && (
