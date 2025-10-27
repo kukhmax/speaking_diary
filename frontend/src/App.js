@@ -15,6 +15,8 @@ const DiaryApp = () => {
   const [audioBlob, setAudioBlob] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [reviewModal, setReviewModal] = useState({ visible: false, data: null });
+  const [audioModal, setAudioModal] = useState({ visible: false, src: null, title: '' });
+  const [explainModal, setExplainModal] = useState({ visible: false, html: '' });
   const UI_LANGUAGE = 'ru';
   
   const mediaRecorderRef = useRef(null);
@@ -68,28 +70,31 @@ const DiaryApp = () => {
     if (exact) return exact;
     const byBase = voices.find(v => (v.lang || '').toLowerCase().startsWith(base));
     if (byBase) return byBase;
-    const byName = voices.find(v => /ru|russian|русский|pt|portuguese|português|es|spanish|español|pl|polish|polski/i.test(v.name || ''));
+    const byName = voices.find(v => /\bru\b|russian|русский|\bpt\b|portuguese|português|\bes\b|spanish|español|\bpl\b|polish|polski/i.test((v.name || '') + ' ' + (v.lang || '')));
     return byName || null;
   };
   const speakText = async (text, lang) => {
     const useLang = normalizeSpeechLang(lang);
     const utter = new SpeechSynthesisUtterance(text);
     try {
-      const voices = await ensureVoices();
-      const v = pickVoice(voices, useLang);
+      let voices = window.speechSynthesis.getVoices();
+      if (!voices || voices.length === 0) {
+        voices = await ensureVoices();
+      }
+      const v = pickVoice(voices || [], useLang);
       if (v) {
         utter.voice = v;
         utter.lang = v.lang || useLang;
       } else {
-        // Fallback: не блокировать воспроизведение, используем системный голос
-        utter.lang = 'en-US';
+        // Fallback: использовать запрошенный язык, даже если голос не найден
+        utter.lang = useLang;
       }
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utter);
     } catch (e) {
       console.error('TTS error:', e);
       window.speechSynthesis.cancel();
-      utter.lang = 'en-US';
+      utter.lang = useLang;
       window.speechSynthesis.speak(utter);
     }
   };
@@ -140,6 +145,12 @@ const DiaryApp = () => {
     });
   };
   const closeReviewModal = () => setReviewModal({ visible: false, data: null });
+
+  // Mobile-friendly modals for compact UI
+  const openAudioModal = (src, title = 'Озвучка') => setAudioModal({ visible: true, src, title });
+  const closeAudioModal = () => setAudioModal({ visible: false, src: null, title: '' });
+  const openExplainModal = (html) => setExplainModal({ visible: true, html });
+  const closeExplainModal = () => setExplainModal({ visible: false, html: '' });
 
   useEffect(() => {
     loadEntries();
@@ -510,21 +521,21 @@ const DiaryApp = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       <div className="bg-black bg-opacity-30 backdrop-blur-md border-b border-purple-500/20">
-        <div className="max-w-2xl mx-auto px-4 py-6">
-          <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
-            Дневник
+        <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+            Голосовой дневник
           </h1>
-          <p className="text-purple-300/70 text-sm mt-1">Голосовые заметки с MediaRecorder</p>
+          <p className="text-purple-300/70 text-xs sm:text-sm mt-1">Голосовые заметки для удобного ведения дневника и изучения языка </p>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <button
           onClick={() => setShowModal(true)}
-          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl py-4 px-6 flex items-center justify-center gap-3 shadow-lg shadow-purple-500/30 transition-all mb-6"
+          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl py-3 px-4 sm:py-4 sm:px-6 flex items-center justify-center gap-2 sm:gap-3 shadow-lg shadow-purple-500/30 transition-all mb-4 sm:mb-6"
         >
-          <Plus size={24} />
-          <span className="text-lg font-semibold">Создать запись</span>
+          <Plus size={22} />
+          <span className="text-base sm:text-lg font-semibold">Создать запись</span>
         </button>
 
         <div className="space-y-3">
@@ -612,11 +623,11 @@ const DiaryApp = () => {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-purple-200">Новая запись</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">Новая запись</h2>
                 <button onClick={() => setShowModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
               </div>
 
@@ -643,24 +654,26 @@ const DiaryApp = () => {
                   </select>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3">
                     {isRecording ? (
                       <button
                         onClick={stopRecording}
                         className="px-4 py-2 rounded-md bg-red-600 text-white flex items-center gap-2 hover:bg-red-700"
                       >
-                        <Square size={18} /> Остановить
+                        <Square size={18} /> <span className="hidden sm:inline">Остановить</span>
+                        <span className="sr-only">Остановить</span>
                       </button>
                     ) : (
                       <button
                         onClick={startRecording}
                         className="px-4 py-2 rounded-md bg-purple-600 text-white flex items-center gap-2 hover:bg-purple-700"
                       >
-                        <Mic size={18} /> Запись
+                        <Mic size={18} /> <span className="hidden sm:inline">Запись</span>
+                        <span className="sr-only">Запись</span>
                       </button>
                     )}
-                    <span className="text-purple-300">{formatTime(recordingTime)}</span>
+                    <span className="text-purple-300 text-sm sm:text-base">{formatTime(recordingTime)}</span>
                   </div>
 
                   {audioBlob && (
@@ -668,14 +681,20 @@ const DiaryApp = () => {
                       <button
                         onClick={playAudio}
                         className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                        aria-label="Прослушать"
                       >
-                        <Play size={18} /> Прослушать
+                        <Play size={18} />
+                        <span className="hidden sm:inline">Прослушать</span>
+                        <span className="sr-only">Прослушать</span>
                       </button>
                       <button
                         onClick={deleteAudio}
                         className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                        aria-label="Удалить"
                       >
-                        <Trash2 size={18} /> Удалить
+                        <Trash2 size={18} />
+                        <span className="hidden sm:inline">Удалить</span>
+                        <span className="sr-only">Удалить</span>
                       </button>
                     </div>
                   )}
@@ -688,7 +707,7 @@ const DiaryApp = () => {
                     onChange={(e) => setCurrentText(e.target.value)}
                     rows={6}
                     className="w-full bg-slate-700/50 text-purple-100 rounded-md p-3 border border-purple-500/30"
-                    placeholder="Скажите что-нибудь или введите текст вручную..."
+                    placeholder="Нажмите на кнопку записи и скажите что-нибудь или введите текст вручную..."
                   />
                 </div>
 
@@ -698,7 +717,7 @@ const DiaryApp = () => {
                     disabled={isProcessing || !currentText.trim()}
                     className="px-4 py-2 rounded-md bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center gap-2 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50"
                   >
-                    <Save size={18} /> {isProcessing ? 'Сохранение...' : 'Сохранить'}
+                    <Save size={18} /> <span>{isProcessing ? 'Сохранение...' : 'Сохранить'}</span>
                   </button>
                 </div>
               </div>
@@ -708,11 +727,11 @@ const DiaryApp = () => {
       )}
 
       {reviewModal.visible && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-purple-200">Проверка и исправления</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">Проверка и исправления</h2>
                 <button onClick={closeReviewModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
               </div>
               <div className="space-y-4">
@@ -729,33 +748,67 @@ const DiaryApp = () => {
                 <div>
                   <div className="flex items-center gap-3 mb-1">
                     <div className="text-sm text-purple-300">Исправленный текст</div>
-                    {!reviewModal.data?.ttsUri && (
-                      <button onClick={() => {
-                      const text = reviewModal.data?.correctedText || reviewModal.data?.original || '';
-                      if (!text) return;
-                      const lang = reviewModal.data?.language || selectedLanguage;
-                      speakText(text, lang);
-                      }} className="text-purple-300 hover:text-purple-200 flex items-center gap-1">
-                        <Play size={16} /> Озвучить (браузер)
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const text = reviewModal.data?.correctedText || reviewModal.data?.original || '';
+                        if (!text) return;
+                        const lang = reviewModal.data?.language || selectedLanguage;
+                        speakText(text, lang);
+                      }}
+                      className="hidden sm:flex text-purple-300 hover:text-purple-200 items-center gap-1"
+                    >
+                      <Play size={16} /> Озвучить (браузер)
+                    </button>
+                    {reviewModal.data?.explanationsHtml && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openExplainModal(reviewModal.data.explanationsHtml); }}
+                        className="ml-auto inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-purple-600 text-white text-sm hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
+                        aria-label="Открыть пояснения"
+                      >
+                        Пояснения
                       </button>
                     )}
                   </div>
+                  <div className="text-purple-100 bg-slate-700/50 rounded-md p-3" dangerouslySetInnerHTML={{ __html: reviewModal.data?.correctedHtml || '' }} />
                   {reviewModal.data?.ttsUri && (
-                    <div className="mb-2">
-                      <div className="text-sm text-purple-300 mb-1">Озвучка (синтез на сервере)</div>
+                    <div className="mt-3 pt-3 border-t border-slate-700/60">
+                      <div className="text-sm text-purple-300 mb-1">Озвучка</div>
                       <audio controls src={reviewModal.data.ttsUri} className="w-full" />
                     </div>
                   )}
-                  <div className="text-purple-100 bg-slate-700/50 rounded-md p-3" dangerouslySetInnerHTML={{ __html: reviewModal.data?.correctedHtml || '' }} />
                 </div>
-                {reviewModal.data?.explanationsHtml && (
-                  <div>
-                    <div className="text-sm text-purple-300 mb-1">Пояснения</div>
-                    <div className="prose prose-invert max-w-none">
-                      <div className="text-purple-100" dangerouslySetInnerHTML={{ __html: reviewModal.data.explanationsHtml }} />
-                    </div>
-                  </div>
-                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {audioModal.visible && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl" role="dialog" aria-modal="true">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{audioModal.title || 'Озвучка'}</h2>
+                <button onClick={closeAudioModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
+              </div>
+              <audio controls src={audioModal.src || ''} className="w-full" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {explainModal.visible && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl" role="dialog" aria-modal="true">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">Пояснения</h2>
+                <button onClick={closeExplainModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
+              </div>
+              <div className="prose prose-invert max-w-none">
+                <div className="text-purple-100" dangerouslySetInnerHTML={{ __html: explainModal.html || '' }} />
               </div>
             </div>
           </div>
