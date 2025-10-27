@@ -1,0 +1,51 @@
+{
+  "header": {
+    "title": "Voice Diary",
+    "subtitle": "Voice notes for easy journaling and language learning"
+  },
+  "actions": {
+    "create_entry": "Create entry",
+    "no_entries": "No entries yet",
+    "click_create_to_start": "Click \"Create entry\" to start",
+    "delete_entry_aria": "Delete entry",
+    "listen": "Listen",
+    "delete": "Delete",
+    "stop": "Stop",
+    "record": "Record",
+    "save": "Save",
+    "saving": "Saving...",
+    "transcribing": "Transcribing..."
+  },
+  "labels": {
+    "language": "Language",
+    "text": "Text",
+    "offline": "Offline"
+  },
+  "placeholders": {
+    "record_or_type": "Click record or type your text..."
+  },
+  "alerts": {
+    "delete_failed": "Failed to delete entry. Check connection.",
+    "mic_failed": "Unable to access microphone. Check permissions.",
+    "saved_offline": "Saved offline. The entry will sync when connection restores.",
+    "transcription_failed": "Transcription failed",
+    "transcription_error_prefix": "Transcription error",
+    "transcription_error_hint": "Check backend and Groq API settings."
+  },
+  "modals": {
+    "new_entry": "New entry",
+    "review_title": "Review and corrections",
+    "original_text": "Original text",
+    "corrected_text": "Corrected text",
+    "explanations": "Explanations",
+    "tts_title": "TTS audio",
+    "open_explanations_aria": "Open explanations",
+    "ui_language_title": "Interface language",
+    "select_language": "Select language",
+    "close": "Close",
+    "apply": "Apply"
+  },
+  "tts": {
+    "speak_browser": "Speak (browser)"
+  }
+}
