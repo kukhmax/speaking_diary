@@ -73,3 +73,27 @@ button {
 .animate-pulse-scale {
   animation: pulse-scale 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Highlight styling inside corrected text: yellow text, no background */
+.corrected-text mark {
+  background-color: transparent;
+  color: #33ff5c; /* Tailwind yellow-400 */
+}
+
+/* Main list: yellow text highlight without background */
+.entry-text mark {
+  background-color: transparent;
+  color: #33ff5c; /* Tailwind yellow-400 */
+}
+
+/* Compact audio players in review modal */
+.audio-compact {
+  height: 35px;
+}
+.audio-compact::-webkit-media-controls-enclosure {
+  height: 35px;
+  padding: 0;
+}
+.audio-compact::-webkit-media-controls-panel {
+  height: 35px;
+}

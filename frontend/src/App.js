@@ -38,7 +38,8 @@ const DiaryApp = () => {
     try {
       return html
         .replace(/([\p{L}\p{N}])<mark/gu, '$1 <mark')
-        .replace(/<\/mark>([\p{L}\p{N}])/gu, '</mark> $1');
+        .replace(/<\/mark>([\p{L}\p{N}])/gu, '</mark> $1')
+        .replace(/([.!?])(?=[^\s<])/g, '$1 ');
     } catch {
       return html;
     }
@@ -238,7 +239,7 @@ const DiaryApp = () => {
         const normalized = {
           id: saved.id,
           text: saved.text,
-          textHtml: rev?.corrected_html || null,
+          textHtml: fixHtmlSpaces(rev?.corrected_html) || null,
           timestamp: saved.timestamp,
           language: saved.language,
           duration: saved.audio_duration,
@@ -522,10 +523,10 @@ const DiaryApp = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       <div className="bg-black bg-opacity-30 backdrop-blur-md border-b border-purple-500/20">
         <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+          <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 text-center">
             Голосовой дневник
           </h1>
-          <p className="text-purple-300/70 text-xs sm:text-sm mt-1">Голосовые заметки для удобного ведения дневника и изучения языка </p>
+          <p className="text-purple-300/70 text-xs sm:text-sm mt-1 text-center">Голосовые заметки для удобного ведения дневника и изучения языка </p>
         </div>
       </div>
 
@@ -599,7 +600,7 @@ const DiaryApp = () => {
                           <img src={getFlagSrc(entry.language)} alt={entry.language} className="h-4 w-6 rounded-sm border border-purple-500/30 mt-1" />
                           {entry.textHtml ? (
                             <div
-                              className="text-purple-100 leading-relaxed cursor-pointer"
+                              className="entry-text text-purple-100 leading-relaxed cursor-pointer"
                               onClick={() => openReview(entry)}
                               dangerouslySetInnerHTML={{ __html: entry.textHtml }}
                             />
@@ -740,42 +741,40 @@ const DiaryApp = () => {
                   <div className="text-purple-100 bg-slate-700/50 rounded-md p-3">{reviewModal.data?.original}</div>
                 </div>
                 {reviewModal.data?.audioUri && (
-                  <div>
-                    <div className="text-sm text-purple-300 mb-1">Аудио</div>
-                    <audio controls src={reviewModal.data.audioUri} className="w-full" />
+                  <div className="mt-2 mb-4">
+                    <audio controls src={reviewModal.data.audioUri} className="w-full audio-compact" />
                   </div>
                 )}
-                <div>
-                  <div className="flex items-center gap-3 mb-1">
-                    <div className="text-sm text-purple-300">Исправленный текст</div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const text = reviewModal.data?.correctedText || reviewModal.data?.original || '';
-                        if (!text) return;
-                        const lang = reviewModal.data?.language || selectedLanguage;
-                        speakText(text, lang);
-                      }}
-                      className="hidden sm:flex text-purple-300 hover:text-purple-200 items-center gap-1"
-                    >
-                      <Play size={16} /> Озвучить (браузер)
-                    </button>
-                    {reviewModal.data?.explanationsHtml && (
+                <div className="mt-4 pt-4 border-t border-slate-700/60">
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="text-sm text-purple-300">Исправленный текст</div>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); openExplainModal(reviewModal.data.explanationsHtml); }}
-                        className="ml-auto inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-purple-600 text-white text-sm hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
-                        aria-label="Открыть пояснения"
+                        onClick={() => {
+                          const text = reviewModal.data?.correctedText || reviewModal.data?.original || '';
+                          if (!text) return;
+                          const lang = reviewModal.data?.language || selectedLanguage;
+                          speakText(text, lang);
+                        }}
+                        className="hidden"
                       >
-                        Пояснения
+                        <Play size={16} /> Озвучить (браузер)
                       </button>
-                    )}
-                  </div>
-                  <div className="text-purple-100 bg-slate-700/50 rounded-md p-3" dangerouslySetInnerHTML={{ __html: reviewModal.data?.correctedHtml || '' }} />
+                      {reviewModal.data?.explanationsHtml && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openExplainModal(reviewModal.data.explanationsHtml); }}
+                          className="ml-auto inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-purple-600 text-white text-sm hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
+                          aria-label="Открыть пояснения"
+                        >
+                          Пояснения
+                        </button>
+                      )}
+                    </div>
+                  <div className="corrected-text text-purple-100 bg-slate-700/50 rounded-md p-3" dangerouslySetInnerHTML={{ __html: reviewModal.data?.correctedHtml || '' }} />
                   {reviewModal.data?.ttsUri && (
-                    <div className="mt-3 pt-3 border-t border-slate-700/60">
-                      <div className="text-sm text-purple-300 mb-1">Озвучка</div>
-                      <audio controls src={reviewModal.data.ttsUri} className="w-full" />
+                    <div className="mt-3 border-t border-slate-700/60">
+                      <audio controls src={reviewModal.data.ttsUri} className="w-full audio-compact" />
                     </div>
                   )}
                 </div>
