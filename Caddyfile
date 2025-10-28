@@ -18,8 +18,13 @@ diary.pw-new.club {
     }
 }
 
-# TPW — обслуживаем по двум доменам (pw-new.club и pw.pw-new.club)
-pw-new.club, pw.pw-new.club {
+# TPW — канонизация домена: все запросы на pw.pw-new.club → pw-new.club
+pw.pw-new.club {
+    redir https://pw-new.club{uri}
+}
+
+# TPW — основной домен
+pw-new.club {
     encode gzip
 
     # Логи (опционально)
