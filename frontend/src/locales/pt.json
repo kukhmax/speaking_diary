@@ -4,10 +4,10 @@
     "subtitle": "Notas de voz para facilitar o diário e o aprendizado de idiomas"
   },
   "actions": {
-    "create_entry": "Criar entrada",
+    "create_entry": "Criar registro",
     "no_entries": "Sem entradas",
-    "click_create_to_start": "Clique em \"Criar entrada\" para começar",
-    "delete_entry_aria": "Excluir entrada",
+    "click_create_to_start": "Clique em \"Criar registro\" para começar",
+    "delete_entry_aria": "Excluir registro",
     "listen": "Ouvir",
     "delete": "Excluir",
     "stop": "Parar",

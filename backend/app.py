@@ -51,6 +51,20 @@ CORS(app, origins="*")
 # Устанавливаем конфигурацию
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 
+# Register Telegram routes (webhook, sessions)
+try:
+    from .routers.telegram import register_telegram_routes  # type: ignore
+except Exception:
+    # Fallback for running as script (python backend/app.py)
+    from routers.telegram import register_telegram_routes  # type: ignore
+
+try:
+    register_telegram_routes(app)
+    print("[TELEGRAM] Routes registered under /api/telegram")
+except Exception as e:
+    # Don't crash app if Telegram bot is not configured; it's optional
+    print(f"[TELEGRAM] Skipping Telegram routes: {e}")
+
 # Database Configuration
 DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///diary.db')
 # PostgreSQL: postgresql://user:pass@host/db
