@@ -1,0 +1,19 @@
+diary.pw-new.club {
+    encode gzip
+
+    # Логи (опционально)
+    log {
+        output stdout
+        format json
+    }
+
+    # Проксируем API-запросы на backend
+    handle /api* {
+        reverse_proxy backend:5000
+    }
+
+    # Все остальные запросы — на фронтенд
+    handle {
+        reverse_proxy frontend:80
+    }
+}

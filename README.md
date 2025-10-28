@@ -29,6 +29,7 @@
 | **[QUICK-REFERENCE.md](QUICK-REFERENCE.md)** | Шпаргалка команд |
 | **[CHANGELOG.md](CHANGELOG.md)** | История изменений v1.0 → v2.0 |
 | **[PROJECT-STRUCTURE.md](PROJECT-STRUCTURE.md)** | Структура проекта |
+| **[SECRETS-GENERATION.md](SECRETS-GENERATION.md)** | Генерация и хранение секретов |
 
 ---
 
@@ -47,6 +48,8 @@ cd diary-app
 # 3. Настройте .env
 cp .env.example .env
 nano .env  # Вставьте GROQ_API_KEY
+
+> Для продакшна: сгенерируйте `DB_PASSWORD` и `SECRET_KEY` по инструкции в [SECRETS-GENERATION.md](SECRETS-GENERATION.md).
 
 # 4. Запустите (одна команда!)
 docker-compose up -d

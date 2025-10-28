@@ -132,6 +132,8 @@ openssl rand -base64 32
 openssl rand -hex 32
 ```
 
+Подробно о генерации и управлении секретами см. в разделе: [SECRETS-GENERATION.md](SECRETS-GENERATION.md).
+
 ### Шаг 5: Настройка Firewall
 
 ```bash

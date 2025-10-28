@@ -54,14 +54,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: /api
     container_name: diary_frontend
     restart: always
     ports:
       - "3000:80"
     depends_on:
       - backend
-    environment:
-      REACT_APP_API_URL: http://localhost:5000/api
+    environment: {}
 
   # pgAdmin (optional - database management UI)
   pgadmin:
