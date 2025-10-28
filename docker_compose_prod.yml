@@ -71,6 +71,9 @@ services:
     depends_on:
       - frontend
       - backend
+    networks:
+      - default
+      - web
 
 volumes:
   postgres_data:
@@ -85,3 +88,6 @@ volumes:
 networks:
   default:
     name: diary_network
+  web:
+    external: true
+    name: web

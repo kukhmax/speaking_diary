@@ -30,6 +30,7 @@
 | **[CHANGELOG.md](CHANGELOG.md)** | История изменений v1.0 → v2.0 |
 | **[PROJECT-STRUCTURE.md](PROJECT-STRUCTURE.md)** | Структура проекта |
 | **[SECRETS-GENERATION.md](SECRETS-GENERATION.md)** | Генерация и хранение секретов |
+| **[MULTI-SITE-CADDY-MIGRATION.md](MULTI-SITE-CADDY-MIGRATION.md)** | Миграция двух приложений за единый Caddy |
 
 ---
 
