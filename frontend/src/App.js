@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Trash2, Settings } from 'lucide-react';
+import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Trash2, MoreVertical } from 'lucide-react';
 import { useI18n } from './i18n';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -615,17 +615,17 @@ const DiaryApp = () => {
       <div className="bg-black bg-opacity-30 backdrop-blur-md border-b border-purple-500/20">
         <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
           <div className="flex items-center justify-between">
-            <div className="flex-1" />
-            <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 text-center">
-              {t('header.title')}
-            </h1>
             <button
-              className="flex-1 flex justify-end text-purple-300 hover:text-purple-200"
+              className="flex-1 flex justify-start text-purple-300 hover:text-purple-200"
               aria-label={t('modals.ui_language_title')}
               onClick={() => { setPendingLang(lang); setSettingsModal(true); }}
             >
-              <Settings size={22} />
+              <MoreVertical size={22} />
             </button>
+            <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 text-center">
+              {t('header.title')}
+            </h1>
+            <div className="flex-1" />
           </div>
           <p className="text-purple-300/70 text-xs sm:text-sm mt-1 text-center">{t('header.subtitle')}</p>
         </div>
@@ -911,7 +911,7 @@ const DiaryApp = () => {
                 <div>
                   <div className="text-sm text-purple-300 mb-2">{t('modals.select_language')}</div>
                   <div className="space-y-2">
-                    {[{ code: 'en', name: 'English', flagSrc: '/flags/us.svg' }, { code: 'ru', name: 'Русский', flagSrc: '/flags/ru.svg' }].map((l) => (
+                    {[{ code: 'en', name: 'English', flagSrc: '/flags/us.svg' }, { code: 'ru', name: 'Русский', flagSrc: '/flags/ru.svg' }, { code: 'pl', name: 'Polski', flagSrc: '/flags/pl.svg' }, { code: 'es', name: 'Español', flagSrc: '/flags/es.svg' }, { code: 'pt', name: 'Português', flagSrc: '/flags/pt.svg' }].map((l) => (
                       <label key={l.code} className="flex items-center gap-3 p-2 rounded-md bg-slate-700/40 border border-purple-500/30 hover:bg-slate-700/60 cursor-pointer">
                         <input
                           type="radio"

@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import en from './locales/en.json';
 import ru from './locales/ru.json';
+import pl from './locales/pl.json';
+import es from './locales/es.json';
+import pt from './locales/pt.json';
 
-const translations = { en, ru };
+const translations = { en, ru, pl, es, pt };
 const rtlLangs = ['ar', 'fa', 'he', 'ur'];
 
 const I18nContext = createContext({
@@ -19,7 +22,10 @@ const getNested = (obj, path) => {
 
 const localeMap = {
   en: 'en-US',
-  ru: 'ru-RU'
+  ru: 'ru-RU',
+  pl: 'pl-PL',
+  es: 'es-ES',
+  pt: 'pt-PT'
 };
 
 export const I18nProvider = ({ children }) => {

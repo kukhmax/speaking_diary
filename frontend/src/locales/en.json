@@ -4,10 +4,10 @@
     "subtitle": "Voice notes for easy journaling and language learning"
   },
   "actions": {
-    "create_entry": "Create entry",
+    "create_entry": "Create a record",
     "no_entries": "No entries yet",
-    "click_create_to_start": "Click \"Create entry\" to start",
-    "delete_entry_aria": "Delete entry",
+    "click_create_to_start": "Click \"Create a record\" to start",
+    "delete_entry_aria": "Delete record",
     "listen": "Listen",
     "delete": "Delete",
     "stop": "Stop",
