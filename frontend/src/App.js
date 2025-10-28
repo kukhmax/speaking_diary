@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Trash2 } from 'lucide-react';
+import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Trash2, MoreVertical } from 'lucide-react';
+import { useI18n } from './i18n';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const DiaryApp = () => {
+  const { lang, t, dir, uiLocale, setLang } = useI18n();
   const [entries, setEntries] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -17,7 +19,8 @@ const DiaryApp = () => {
   const [reviewModal, setReviewModal] = useState({ visible: false, data: null });
   const [audioModal, setAudioModal] = useState({ visible: false, src: null, title: '' });
   const [explainModal, setExplainModal] = useState({ visible: false, html: '' });
-  const UI_LANGUAGE = 'ru';
+  const [settingsModal, setSettingsModal] = useState(false);
+  const [pendingLang, setPendingLang] = useState(lang);
   
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -28,8 +31,10 @@ const DiaryApp = () => {
   // Review & Audio storage helpers
   const REVIEW_PREFIX = 'entry_review:';
   const AUDIO_PREFIX = 'entry_audio:';
-  const saveReview = (id, obj) => { try { localStorage.setItem(REVIEW_PREFIX + id, JSON.stringify(obj)); } catch {} };
-  const loadReview = (id) => { try { const s = localStorage.getItem(REVIEW_PREFIX + id); return s ? JSON.parse(s) : null; } catch { return null; } };
+  const saveReviewLegacy = (id, obj) => { try { localStorage.setItem(REVIEW_PREFIX + id, JSON.stringify(obj)); } catch {} };
+  const loadReviewLegacy = (id) => { try { const s = localStorage.getItem(REVIEW_PREFIX + id); return s ? JSON.parse(s) : null; } catch { return null; } };
+  const saveReviewForLang = (id, obj, uiLang) => { try { localStorage.setItem(`${REVIEW_PREFIX}${id}:${uiLang}`, JSON.stringify(obj)); } catch {} };
+  const loadReviewForLang = (id, uiLang) => { try { const s = localStorage.getItem(`${REVIEW_PREFIX}${id}:${uiLang}`); if (s) return JSON.parse(s); const legacy = localStorage.getItem(REVIEW_PREFIX + id); return legacy ? JSON.parse(legacy) : null; } catch { return null; } };
   const blobToDataUrl = (blob) => new Promise((resolve, reject) => { const r = new FileReader(); r.onloadend = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(blob); });
   const saveAudio = async (id, blob) => { try { const url = await blobToDataUrl(blob); localStorage.setItem(AUDIO_PREFIX + id, url); } catch {} };
   const loadAudio = (id) => { try { return localStorage.getItem(AUDIO_PREFIX + id); } catch { return null; } };
@@ -44,7 +49,7 @@ const DiaryApp = () => {
       return html;
     }
   };
-  const removeReview = (id) => { try { localStorage.removeItem(REVIEW_PREFIX + id); } catch {} };
+  const removeReview = (id) => { try { localStorage.removeItem(REVIEW_PREFIX + id); Object.keys(localStorage).forEach(k => { if (k.startsWith(`${REVIEW_PREFIX}${id}:`)) localStorage.removeItem(k); }); } catch {} };
   const removeAudio = (id) => { try { localStorage.removeItem(AUDIO_PREFIX + id); } catch {} };
   const normalizeSpeechLang = (lang) => {
     const lower = (lang || '').toLowerCase();
@@ -123,13 +128,13 @@ const DiaryApp = () => {
       setEntries(prev => prev.filter(e => e.id !== entry.id));
     } catch (err) {
       console.error('Delete entry failed:', err);
-      alert('Не удалось удалить запись. Проверьте соединение.');
+      alert(t('alerts.delete_failed'));
     }
   };
-  const migrateLocalData = (oldId, newId) => { try { const r = loadReview(oldId); if (r) saveReview(newId, r); const a = loadAudio(oldId); if (a) localStorage.setItem(AUDIO_PREFIX + newId, a); localStorage.removeItem(REVIEW_PREFIX + oldId); localStorage.removeItem(AUDIO_PREFIX + oldId); } catch {} };
+  const migrateLocalData = (oldId, newId) => { try { const r = loadReviewLegacy(oldId); if (r) saveReviewLegacy(newId, r); const a = loadAudio(oldId); if (a) localStorage.setItem(AUDIO_PREFIX + newId, a); localStorage.removeItem(REVIEW_PREFIX + oldId); localStorage.removeItem(AUDIO_PREFIX + oldId); } catch {} };
 
   const openReview = (entry) => {
-    const rev = loadReview(entry.id);
+    const rev = loadReviewForLang(entry.id, lang);
     const audioUri = loadAudio(entry.id);
     setReviewModal({
       visible: true,
@@ -144,11 +149,41 @@ const DiaryApp = () => {
         language: rev?.language || entry.language
       }
     });
+    if (!rev) {
+      (async () => {
+        try {
+          const resp = await fetch(`${API_BASE}/review`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: entry.text, language: entry.language, ui_language: lang })
+          });
+          if (resp.ok) {
+            const revObj = await resp.json();
+            saveReviewForLang(entry.id, { ...revObj, original_text: entry.text }, lang);
+            setReviewModal(prev => {
+              if (!prev.visible || prev.data?.entryId !== entry.id) return prev;
+              return {
+                visible: true,
+                data: {
+                  ...prev.data,
+                  correctedHtml: fixHtmlSpaces(revObj?.corrected_html) || entry.text,
+                  correctedText: revObj?.corrected_text || entry.text,
+                  explanationsHtml: revObj?.explanations_html || '',
+                  ttsUri: revObj?.tts_audio_data_url || null
+                }
+              };
+            });
+          }
+        } catch (e) {
+          console.error('Lazy review fetch failed:', e);
+        }
+      })();
+    }
   };
   const closeReviewModal = () => setReviewModal({ visible: false, data: null });
 
   // Mobile-friendly modals for compact UI
-  const openAudioModal = (src, title = 'Озвучка') => setAudioModal({ visible: true, src, title });
+  const openAudioModal = (src, title = t('modals.tts_title')) => setAudioModal({ visible: true, src, title });
   const closeAudioModal = () => setAudioModal({ visible: false, src: null, title: '' });
   const openExplainModal = (html) => setExplainModal({ visible: true, html });
   const closeExplainModal = () => setExplainModal({ visible: false, html: '' });
@@ -162,6 +197,62 @@ const DiaryApp = () => {
       }
     };
   }, []);
+
+  // Update list corrected HTML when UI language changes
+  useEffect(() => {
+    setEntries(prev => prev.map(e => {
+      const rev = loadReviewForLang(e.id, lang);
+      return { ...e, textHtml: fixHtmlSpaces(rev?.corrected_html) || null };
+    }));
+  }, [lang]);
+
+  // Re-fetch review/explanations for open modal when language changes
+  useEffect(() => {
+    if (reviewModal.visible && reviewModal.data?.entryId) {
+      const entryId = reviewModal.data.entryId;
+      const entry = entries.find(e => e.id === entryId);
+      const rev = loadReviewForLang(entryId, lang);
+      if (rev) {
+        setReviewModal(prev => ({
+          visible: true,
+          data: {
+            ...prev.data,
+            original: rev?.original_text || entry?.text || prev.data?.original || '',
+            correctedHtml: fixHtmlSpaces(rev?.corrected_html) || entry?.text || prev.data?.correctedHtml || '',
+            correctedText: rev?.corrected_text || entry?.text || prev.data?.correctedText || '',
+            explanationsHtml: rev?.explanations_html || '',
+            ttsUri: rev?.tts_audio_data_url || null
+          }
+        }));
+      } else if (entry) {
+        (async () => {
+          try {
+            const resp = await fetch(`${API_BASE}/review`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: entry.text, language: entry.language, ui_language: lang })
+            });
+            if (resp.ok) {
+              const revObj = await resp.json();
+              saveReviewForLang(entry.id, { ...revObj, original_text: entry.text }, lang);
+              setReviewModal(prev => ({
+                visible: true,
+                data: {
+                  ...prev.data,
+                  correctedHtml: fixHtmlSpaces(revObj?.corrected_html) || entry.text,
+                  correctedText: revObj?.corrected_text || entry.text,
+                  explanationsHtml: revObj?.explanations_html || '',
+                  ttsUri: revObj?.tts_audio_data_url || null
+                }
+              }));
+            }
+          } catch (e) {
+            console.error('Review fetch on language change failed:', e);
+          }
+        })();
+      }
+    }
+  }, [lang]);
 
   // Offline storage helpers
   const OFFLINE_KEY = 'offline_entries';
@@ -178,7 +269,7 @@ const DiaryApp = () => {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       const serverEntries = (data.entries || []).map(e => {
-        const rev = loadReview(e.id);
+        const rev = loadReviewForLang(e.id, lang);
         return {
           id: e.id,
           text: e.text,
@@ -190,7 +281,7 @@ const DiaryApp = () => {
         };
       });
       const offlineEntries = getOfflineEntries().map(e => {
-        const rev = loadReview(e.id);
+        const rev = loadReviewForLang(e.id, lang);
         return { ...e, textHtml: fixHtmlSpaces(rev?.corrected_html) || null };
       });
       const combined = [...serverEntries, ...offlineEntries].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -226,16 +317,16 @@ const DiaryApp = () => {
           const revResp = await fetch(`${API_BASE}/review`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: saved.text, language: saved.language, ui_language: UI_LANGUAGE })
+            body: JSON.stringify({ text: saved.text, language: saved.language, ui_language: lang })
           });
           if (revResp.ok) {
             const revObj = await revResp.json();
-            saveReview(saved.id, { ...revObj, original_text: saved.text });
+            saveReviewForLang(saved.id, { ...revObj, original_text: saved.text }, lang);
           }
         } catch (e) {
           console.error('Review failed during sync:', e);
         }
-        const rev = loadReview(saved.id);
+        const rev = loadReviewForLang(saved.id, lang);
         const normalized = {
           id: saved.id,
           text: saved.text,
@@ -307,7 +398,7 @@ const DiaryApp = () => {
 
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      alert('Не удалось получить доступ к микрофону. Проверьте разрешения.');
+      alert(t('alerts.mic_failed'));
     }
   };
 
@@ -325,7 +416,7 @@ const DiaryApp = () => {
 
   const transcribeAudio = async (blob) => {
     setIsProcessing(true);
-    setCurrentText('Транскрибация...');
+    setCurrentText(t('actions.transcribing'));
 
     try {
       const formData = new FormData();
@@ -358,12 +449,12 @@ const DiaryApp = () => {
         throw new Error(data.error);
       }
       
-      setCurrentText(data.text || 'Транскрибация не удалась');
+      setCurrentText(data.text || t('alerts.transcription_failed'));
       setIsProcessing(false);
 
     } catch (error) {
       console.error('Transcription error:', error);
-      setCurrentText(`Ошибка транскрибации: ${error.message}. Проверьте подключение к backend и настройки Groq API.`);
+      setCurrentText(`${t('alerts.transcription_error_prefix')}: ${error.message}. ${t('alerts.transcription_error_hint')}`);
       setIsProcessing(false);
     }
   };
@@ -419,11 +510,11 @@ const DiaryApp = () => {
         const revResp = await fetch(`${API_BASE}/review`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: saved.text, language: saved.language, ui_language: UI_LANGUAGE })
+          body: JSON.stringify({ text: saved.text, language: saved.language, ui_language: lang })
         });
         if (revResp.ok) {
           const rev = await revResp.json();
-          saveReview(saved.id, { ...rev, original_text: saved.text });
+          saveReviewForLang(saved.id, { ...rev, original_text: saved.text }, lang);
         }
       } catch (e) {
         console.error('Review request failed:', e);
@@ -434,7 +525,7 @@ const DiaryApp = () => {
         try { await saveAudio(saved.id, audioBlob); } catch {}
       }
 
-      const rev = loadReview(saved.id);
+      const rev = loadReviewForLang(saved.id, lang);
       const normalized = {
         id: saved.id,
         text: saved.text,
@@ -470,7 +561,7 @@ const DiaryApp = () => {
       if (audioBlob) {
         try { await saveAudio(offlineId, audioBlob); } catch {}
       }
-      alert('Сохранено офлайн. Запись синхронизируется при восстановлении соединения.');
+      alert(t('alerts.saved_offline'));
       setShowModal(false);
       setCurrentText('');
       setAudioBlob(null);
@@ -489,7 +580,7 @@ const DiaryApp = () => {
   const groupEntriesByDate = () => {
     const grouped = {};
     entries.forEach(entry => {
-      const date = new Date(entry.timestamp).toLocaleDateString('ru-RU', {
+      const date = new Date(entry.timestamp).toLocaleDateString(uiLocale, {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
@@ -520,13 +611,23 @@ const DiaryApp = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" dir={dir}>
       <div className="bg-black bg-opacity-30 backdrop-blur-md border-b border-purple-500/20">
         <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 text-center">
-            Голосовой дневник
-          </h1>
-          <p className="text-purple-300/70 text-xs sm:text-sm mt-1 text-center">Голосовые заметки для удобного ведения дневника и изучения языка </p>
+          <div className="flex items-center justify-between">
+            <button
+              className="flex-1 flex justify-start text-purple-300 hover:text-purple-200"
+              aria-label={t('modals.ui_language_title')}
+              onClick={() => { setPendingLang(lang); setSettingsModal(true); }}
+            >
+              <MoreVertical size={22} />
+            </button>
+            <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 text-center">
+              {t('header.title')}
+            </h1>
+            <div className="flex-1" />
+          </div>
+          <p className="text-purple-300/70 text-xs sm:text-sm mt-1 text-center">{t('header.subtitle')}</p>
         </div>
       </div>
 
@@ -536,14 +637,14 @@ const DiaryApp = () => {
           className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-2xl py-3 px-4 sm:py-4 sm:px-6 flex items-center justify-center gap-2 sm:gap-3 shadow-lg shadow-purple-500/30 transition-all mb-4 sm:mb-6"
         >
           <Plus size={22} />
-          <span className="text-base sm:text-lg font-semibold">Создать запись</span>
+          <span className="text-base sm:text-lg font-semibold">{t('actions.create_entry')}</span>
         </button>
 
         <div className="space-y-3">
           {Object.keys(groupedEntries).length === 0 ? (
             <div className="text-center py-12 text-purple-300/50">
-              <p>Пока нет записей</p>
-              <p className="text-sm mt-2">Нажмите "Создать запись" чтобы начать</p>
+              <p>{t('actions.no_entries')}</p>
+              <p className="text-sm mt-2">{t('actions.click_create_to_start')}</p>
             </div>
           ) : (
             Object.entries(groupedEntries).map(([date, dateEntries]) => (
@@ -570,14 +671,14 @@ const DiaryApp = () => {
                         <div className="flex justify-between items-start mb-1">
                           <div className="flex items-center gap-2">
                             <div className="text-sm text-purple-400/60">
-                              {new Date(entry.timestamp).toLocaleTimeString('ru-RU', {
+                              {new Date(entry.timestamp).toLocaleTimeString(uiLocale, {
                                 hour: '2-digit',
                                 minute: '2-digit'
                               })}
                             </div>
                             {entry.isOffline && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-                                Офлайн
+                                {t('labels.offline')}
                               </span>
                             )}
                           </div>
@@ -590,7 +691,7 @@ const DiaryApp = () => {
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDeleteEntry(entry); }}
                               className="text-purple-400 hover:text-pink-300"
-                              aria-label="Удалить запись"
+                              aria-label={t('actions.delete_entry_aria')}
                             >
                               <X size={18} />
                             </button>
@@ -628,13 +729,13 @@ const DiaryApp = () => {
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">Новая запись</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.new_entry')}</h2>
                 <button onClick={() => setShowModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <div className="text-sm text-purple-300 mb-1">Язык</div>
+                  <div className="text-sm text-purple-300 mb-1">{t('labels.language')}</div>
                   {(() => {
                     const currentLang = languages.find(l => l.code === selectedLanguage) || languages[0];
                     return (
@@ -662,16 +763,16 @@ const DiaryApp = () => {
                         onClick={stopRecording}
                         className="px-4 py-2 rounded-md bg-red-600 text-white flex items-center gap-2 hover:bg-red-700"
                       >
-                        <Square size={18} /> <span className="hidden sm:inline">Остановить</span>
-                        <span className="sr-only">Остановить</span>
+                        <Square size={18} /> <span className="hidden sm:inline">{t('actions.stop')}</span>
+                        <span className="sr-only">{t('actions.stop')}</span>
                       </button>
                     ) : (
                       <button
                         onClick={startRecording}
                         className="px-4 py-2 rounded-md bg-purple-600 text-white flex items-center gap-2 hover:bg-purple-700"
                       >
-                        <Mic size={18} /> <span className="hidden sm:inline">Запись</span>
-                        <span className="sr-only">Запись</span>
+                        <Mic size={18} /> <span className="hidden sm:inline">{t('actions.record')}</span>
+                        <span className="sr-only">{t('actions.record')}</span>
                       </button>
                     )}
                     <span className="text-purple-300 text-sm sm:text-base">{formatTime(recordingTime)}</span>
@@ -682,33 +783,33 @@ const DiaryApp = () => {
                       <button
                         onClick={playAudio}
                         className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
-                        aria-label="Прослушать"
+                        aria-label={t('actions.listen')}
                       >
                         <Play size={18} />
-                        <span className="hidden sm:inline">Прослушать</span>
-                        <span className="sr-only">Прослушать</span>
+                        <span className="hidden sm:inline">{t('actions.listen')}</span>
+                        <span className="sr-only">{t('actions.listen')}</span>
                       </button>
                       <button
                         onClick={deleteAudio}
                         className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
-                        aria-label="Удалить"
+                        aria-label={t('actions.delete')}
                       >
                         <Trash2 size={18} />
-                        <span className="hidden sm:inline">Удалить</span>
-                        <span className="sr-only">Удалить</span>
+                        <span className="hidden sm:inline">{t('actions.delete')}</span>
+                        <span className="sr-only">{t('actions.delete')}</span>
                       </button>
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <div className="text-sm text-purple-300 mb-1">Текст</div>
+                  <div className="text-sm text-purple-300 mb-1">{t('labels.text')}</div>
                   <textarea
                     value={currentText}
                     onChange={(e) => setCurrentText(e.target.value)}
                     rows={6}
                     className="w-full bg-slate-700/50 text-purple-100 rounded-md p-3 border border-purple-500/30"
-                    placeholder="Нажмите на кнопку записи и скажите что-нибудь или введите текст вручную..."
+                    placeholder={t('placeholders.record_or_type')}
                   />
                 </div>
 
@@ -718,7 +819,7 @@ const DiaryApp = () => {
                     disabled={isProcessing || !currentText.trim()}
                     className="px-4 py-2 rounded-md bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center gap-2 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50"
                   >
-                    <Save size={18} /> <span>{isProcessing ? 'Сохранение...' : 'Сохранить'}</span>
+                    <Save size={18} /> <span>{isProcessing ? t('actions.saving') : t('actions.save')}</span>
                   </button>
                 </div>
               </div>
@@ -732,12 +833,12 @@ const DiaryApp = () => {
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">Проверка и исправления</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.review_title')}</h2>
                 <button onClick={closeReviewModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
               </div>
               <div className="space-y-4">
                 <div>
-                  <div className="text-sm text-purple-300 mb-1">Исходный текст</div>
+                  <div className="text-sm text-purple-300 mb-1">{t('modals.original_text')}</div>
                   <div className="text-purple-100 bg-slate-700/50 rounded-md p-3">{reviewModal.data?.original}</div>
                 </div>
                 {reviewModal.data?.audioUri && (
@@ -747,7 +848,7 @@ const DiaryApp = () => {
                 )}
                 <div className="mt-4 pt-4 border-t border-slate-700/60">
                     <div className="flex items-center gap-3 mb-1">
-                      <div className="text-sm text-purple-300">Исправленный текст</div>
+                      <div className="text-sm text-purple-300">{t('modals.corrected_text')}</div>
                       <button
                         type="button"
                         onClick={() => {
@@ -758,16 +859,16 @@ const DiaryApp = () => {
                         }}
                         className="hidden"
                       >
-                        <Play size={16} /> Озвучить (браузер)
+                        <Play size={16} /> {t('tts.speak_browser')}
                       </button>
                       {reviewModal.data?.explanationsHtml && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); openExplainModal(reviewModal.data.explanationsHtml); }}
                           className="ml-auto inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-purple-600 text-white text-sm hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
-                          aria-label="Открыть пояснения"
+                          aria-label={t('modals.open_explanations_aria')}
                         >
-                          Пояснения
+                          {t('modals.explanations')}
                         </button>
                       )}
                     </div>
@@ -789,10 +890,57 @@ const DiaryApp = () => {
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl" role="dialog" aria-modal="true">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{audioModal.title || 'Озвучка'}</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{audioModal.title || t('modals.tts_title')}</h2>
                 <button onClick={closeAudioModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
               </div>
               <audio controls src={audioModal.src || ''} className="w-full" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70]">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.ui_language_title')}</h2>
+                <button onClick={() => setSettingsModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm text-purple-300 mb-2">{t('modals.select_language')}</div>
+                  <div className="space-y-2">
+                    {[{ code: 'en', name: 'English', flagSrc: '/flags/us.svg' }, { code: 'ru', name: 'Русский', flagSrc: '/flags/ru.svg' }, { code: 'pl', name: 'Polski', flagSrc: '/flags/pl.svg' }, { code: 'es', name: 'Español', flagSrc: '/flags/es.svg' }, { code: 'pt', name: 'Português', flagSrc: '/flags/pt.svg' }].map((l) => (
+                      <label key={l.code} className="flex items-center gap-3 p-2 rounded-md bg-slate-700/40 border border-purple-500/30 hover:bg-slate-700/60 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="uiLang"
+                          className="accent-purple-500"
+                          checked={pendingLang === l.code}
+                          onChange={() => setPendingLang(l.code)}
+                        />
+                        <img src={l.flagSrc} alt={l.name} className="h-4 w-6 rounded-sm border border-purple-500/30" />
+                        <span className="text-purple-200">{l.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => setSettingsModal(false)}
+                    className="px-4 py-2 rounded-md bg-slate-700/50 text-purple-100 border border-purple-500/30 hover:bg-slate-700"
+                  >
+                    {t('modals.close')}
+                  </button>
+                  <button
+                    onClick={() => { setLang(pendingLang); setSettingsModal(false); }}
+                    className="px-4 py-2 rounded-md bg-gradient-to-r from-purple-600 to-pink-600 text-white border border-purple-500/40 hover:from-purple-700 hover:to-pink-700"
+                  >
+                    {t('modals.apply')}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -803,7 +951,7 @@ const DiaryApp = () => {
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl" role="dialog" aria-modal="true">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">Пояснения</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.explanations')}</h2>
                 <button onClick={closeExplainModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
               </div>
               <div className="prose prose-invert max-w-none">

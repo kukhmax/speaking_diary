@@ -1,0 +1,51 @@
+{
+  "header": {
+    "title": "Diario de voz",
+    "subtitle": "Notas de voz para llevar un diario y aprender idiomas"
+  },
+  "actions": {
+    "create_entry": "Crear entrada",
+    "no_entries": "Aún no hay entradas",
+    "click_create_to_start": "Haz clic en \"Crear entrada\" para empezar",
+    "delete_entry_aria": "Eliminar entrada",
+    "listen": "Escuchar",
+    "delete": "Eliminar",
+    "stop": "Detener",
+    "record": "Grabar",
+    "save": "Guardar",
+    "saving": "Guardando...",
+    "transcribing": "Transcribiendo..."
+  },
+  "labels": {
+    "language": "Idioma",
+    "text": "Texto",
+    "offline": "Sin conexión"
+  },
+  "placeholders": {
+    "record_or_type": "Haz clic en \"Grabar\" o escribe tu texto..."
+  },
+  "alerts": {
+    "delete_failed": "No se pudo eliminar la entrada. Revisa la conexión.",
+    "mic_failed": "No se pudo acceder al micrófono. Revisa los permisos.",
+    "saved_offline": "Guardado sin conexión. La entrada se sincronizará al restaurar la conexión.",
+    "transcription_failed": "La transcripción falló",
+    "transcription_error_prefix": "Error de transcripción",
+    "transcription_error_hint": "Revisa el backend y la configuración de Groq API."
+  },
+  "modals": {
+    "new_entry": "Nueva entrada",
+    "review_title": "Revisión y correcciones",
+    "original_text": "Texto original",
+    "corrected_text": "Texto corregido",
+    "explanations": "Explicaciones",
+    "tts_title": "Audio TTS",
+    "open_explanations_aria": "Abrir explicaciones",
+    "ui_language_title": "Idioma de la interfaz",
+    "select_language": "Selecciona el idioma",
+    "close": "Cerrar",
+    "apply": "Aplicar"
+  },
+  "tts": {
+    "speak_browser": "Hablar (navegador)"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "header": {
+    "title": "Dziennik głosowy",
+    "subtitle": "Notatki głosowe do wygodnego prowadzenia dziennika i nauki języka"
+  },
+  "actions": {
+    "create_entry": "Utwórz wpis",
+    "no_entries": "Brak wpisów",
+    "click_create_to_start": "Kliknij \"Utwórz wpis\", aby rozpocząć",
+    "delete_entry_aria": "Usuń wpis",
+    "listen": "Odsłuchaj",
+    "delete": "Usuń",
+    "stop": "Stop",
+    "record": "Nagraj",
+    "save": "Zapisz",
+    "saving": "Zapisywanie...",
+    "transcribing": "Transkrypcja..."
+  },
+  "labels": {
+    "language": "Język",
+    "text": "Tekst",
+    "offline": "Offline"
+  },
+  "placeholders": {
+    "record_or_type": "Kliknij \"Nagraj\" albo wpisz tekst..."
+  },
+  "alerts": {
+    "delete_failed": "Nie udało się usunąć wpisu. Sprawdź połączenie.",
+    "mic_failed": "Nie udało się uzyskać dostępu do mikrofonu. Sprawdź uprawnienia.",
+    "saved_offline": "Zapisano offline. Wpis zsynchronizuje się po przywróceniu połączenia.",
+    "transcription_failed": "Transkrypcja nie powiodła się",
+    "transcription_error_prefix": "Błąd transkrypcji",
+    "transcription_error_hint": "Sprawdź backend i ustawienia Groq API."
+  },
+  "modals": {
+    "new_entry": "Nowy wpis",
+    "review_title": "Weryfikacja i poprawki",
+    "original_text": "Tekst oryginalny",
+    "corrected_text": "Tekst poprawiony",
+    "explanations": "Wyjaśnienia",
+    "tts_title": "Synteza mowy (TTS)",
+    "open_explanations_aria": "Otwórz wyjaśnienia",
+    "ui_language_title": "Język interfejsu",
+    "select_language": "Wybierz język",
+    "close": "Zamknij",
+    "apply": "Zastosuj"
+  },
+  "tts": {
+    "speak_browser": "Odczytaj (przeglądarka)"
+  }
+}
