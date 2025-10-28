@@ -1,7 +1,7 @@
 import os
 from flask import Blueprint, request, jsonify
 
-from ..services.telegram_bot import TelegramBotService, validate_webhook_secret, SessionStore
+from services.telegram_bot import TelegramBotService, validate_webhook_secret, SessionStore
 
 
 def register_telegram_routes(app):
