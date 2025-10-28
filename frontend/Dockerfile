@@ -13,6 +13,10 @@ RUN npm install --silent
 # Копирование исходного кода
 COPY . .
 
+# Проброс переменной окружения для API базового URL во время сборки
+ARG REACT_APP_API_URL=/api
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+
 # Build приложения
 RUN npm run build
 
