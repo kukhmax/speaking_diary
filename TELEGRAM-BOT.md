@@ -49,6 +49,25 @@
      - `PUBLIC_WEBAPP_URL=https://diary.pw-new.club/` (или ваш домен)
      - `TELEGRAM_WEBHOOK_SECRET=<случайная‑строка>`
 
+     ```
+     Что это
+
+      - TELEGRAM_WEBHOOK_SECRET — это не токен от BotFather. Это ваша собственная секретная строка, чтобы защитить эндпоинт вебхука от посторонних запросов.
+      - Вы придумываете и генерируете её сами (лучше криптографически случайную, длиной 32+ байта).
+      Как сгенерировать
+
+      - PowerShell (Windows):
+        - python -c "import secrets; print(secrets.token_urlsafe(32))"
+        - или [guid]::NewGuid().ToString('N') (проще, но менее случайно, всё же лучше вариант выше)
+      - Node.js:
+        - node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      - OpenSSL (Git Bash/WSL/Linux/macOS):
+        - openssl rand -hex 32
+      Возьмите полученное значение и запишите в .env :
+
+      - TELEGRAM_WEBHOOK_SECRET=<ваша_случайная_строка>
+      ```
+
 3) Собрать/перезапустить бэкенд
    - Поднять бэкенд, чтобы он отдавал `/api/telegram/webhook` (Caddy уже проксирует `/api*` на backend):
      - `docker compose -f docker_compose.prod.yml up -d --build backend`
@@ -56,9 +75,23 @@
 4) Зарегистрировать вебхук Telegram
    - URL вебхука: `https://diary.pw-new.club/api/telegram/webhook?secret=<SECRET>`
    - Вызвать Bot API:
-     - `curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=https://diary.pw-new.club/api/telegram/webhook?secret=${TELEGRAM_WEBHOOK_SECRET}"`
+     - Linux/macOS (Bash):
+       - `export TELEGRAM_BOT_TOKEN="<ТОКЕН_ОТ_BOTFATHER>"`
+       - `export TELEGRAM_WEBHOOK_SECRET="<ВАШ_СЕКРЕТ>"`
+       - `curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook?url=https://diary.pw-new.club/api/telegram/webhook?secret=${TELEGRAM_WEBHOOK_SECRET}"`
+     - Windows PowerShell:
+       - `$env:TELEGRAM_BOT_TOKEN = "<ТОКЕН_ОТ_BOTFATHER>"`
+       - `$env:TELEGRAM_WEBHOOK_SECRET = "<ВАШ_СЕКРЕТ>"`
+       - `curl.exe -s "https://api.telegram.org/bot$env:TELEGRAM_BOT_TOKEN/setWebhook?url=https://diary.pw-new.club/api/telegram/webhook?secret=$env:TELEGRAM_WEBHOOK_SECRET"`
+       - Примечание: в PowerShell `curl` — алиас на `Invoke-WebRequest`. Используйте `curl.exe` или `Invoke-RestMethod`:
+         - `$token = $env:TELEGRAM_BOT_TOKEN; $secret = $env:TELEGRAM_WEBHOOK_SECRET; $url = "https://api.telegram.org/bot$token/setWebhook?url=https://diary.pw-new.club/api/telegram/webhook?secret=$secret"`
+         - `Invoke-RestMethod -Method Get -Uri $url`
    - Проверить:
-     - `curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" | jq`
+     - Linux/macOS (Bash):
+       - `curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo" | jq`
+     - Windows PowerShell:
+       - `Invoke-RestMethod -Method Get -Uri "https://api.telegram.org/bot$env:TELEGRAM_BOT_TOKEN/getWebhookInfo"`
+       - или `curl.exe -s "https://api.telegram.org/bot$env:TELEGRAM_BOT_TOKEN/getWebhookInfo" | ConvertFrom-Json`
 
 5) Тестирование
    - Откройте бота в Telegram и отправьте `/start`.
