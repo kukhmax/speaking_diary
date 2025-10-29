@@ -1,7 +1,7 @@
 # app.py - Синхронная версия с Flask
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, text
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, text, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import inspect
@@ -96,7 +96,7 @@ class User(Base):
     __tablename__ = 'user'
 
     id = Column(Integer, primary_key=True)
-    telegram_id = Column(Integer, unique=True, index=True, nullable=True)
+    telegram_id = Column(BigInteger, unique=True, index=True, nullable=True)
     username = Column(String(255), nullable=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
@@ -149,6 +149,23 @@ def _ensure_schema():
                     print(f'[DB] Could not add entry.user_id: {e}')
     except Exception as e:
         print(f'[DB] Inspector error: {e}')
+
+    # Ensure user.telegram_id uses BIGINT in PostgreSQL to fit large Telegram IDs
+    try:
+        ucols = inspector.get_columns('user')
+        tele_col = next((c for c in ucols if c.get('name') == 'telegram_id'), None)
+        if tele_col:
+            col_type = str(tele_col.get('type')).lower()
+            if 'bigint' not in col_type and engine.dialect.name in ['postgresql', 'postgres']:
+                with engine.connect() as conn:
+                    try:
+                        conn.execute(text('ALTER TABLE "user" ALTER COLUMN telegram_id TYPE BIGINT USING telegram_id::bigint'))
+                        conn.commit()
+                        print('[DB] Migrated user.telegram_id to BIGINT')
+                    except Exception as e:
+                        print(f'[DB] Could not alter user.telegram_id to BIGINT: {e}')
+    except Exception as e:
+        print(f'[DB] telegram_id type check error: {e}')
 
 _ensure_schema()
 
