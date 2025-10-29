@@ -31,6 +31,8 @@ services:
       DATABASE_URL: postgresql+psycopg2://diary_user:${DB_PASSWORD:-changeme123}@db:5432/diary_db
       GROQ_API_KEY: ${GROQ_API_KEY}
       FLASK_ENV: production
+      ENV: prod
+      ENABLE_SECURE_COOKIE: "true"
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
     depends_on:
       db:

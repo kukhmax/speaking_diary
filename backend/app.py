@@ -51,17 +51,27 @@ else:
 # Flask - создаем приложение
 app = Flask(__name__)
 
-# Настраиваем CORS: dev — localhost, prod — same-origin через Caddy
+# Настраиваем CORS
+# В проде разрешаем только HTTPS-оригины, в деве добавляем HTTP и localhost
+env_mode = (os.getenv('ENV', '') or os.getenv('FLASK_ENV', '')).lower()
+allowed_origins = [
+    "https://diary.pw-new.club",
+    "https://app.diary.pw-new.club",
+]
+if env_mode != 'prod' and env_mode != 'production':
+    allowed_origins += [
+        "http://diary.pw-new.club",
+        "http://app.diary.pw-new.club",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
 CORS(
     app,
-    resources={r"/api/*": {"origins": [
-        "https://diary.pw-new.club",
-        "http://diary.pw-new.club",
-        "https://app.diary.pw-new.club",
-        "http://app.diary.pw-new.club"
-    ]}},
+    resources={r"/api/*": {"origins": allowed_origins}},
     supports_credentials=True,
-    allow_headers=["Content-Type", "Authorization"]
+    allow_headers=["Content-Type", "Authorization"],
+    always_send=False,
 )
 
 # Устанавливаем конфигурацию
@@ -281,7 +291,7 @@ except Exception:
     from services.telegram_bot import SessionStore  # type: ignore
 
 def _set_auth_cookie(resp, token: str):
-    secure = (os.getenv('ENV', '').lower() == 'prod') or (os.getenv('ENABLE_SECURE_COOKIE', 'false').lower() == 'true')
+    secure = (os.getenv('ENV', '').lower() in ['prod', 'production']) or (os.getenv('ENABLE_SECURE_COOKIE', 'false').lower() == 'true')
     # В Telegram WebView cookie иногда рассматриваются как кросс-сайтовые.
     # Если secure включен (прод), используем SameSite=None для совместимости.
     samesite_mode = 'None' if secure else 'Lax'
