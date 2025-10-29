@@ -124,3 +124,55 @@ API заметок (пример)
   - Домен в `PUBLIC_WEBAPP_URL` корректен и открывается в Telegram.
   - Логи бэкенда: `docker logs diary_backend` — нет ли ошибок Flask.
   - `curl -I https://diary.pw-new.club/api/telegram/health` возвращает 200.
+
+
+
+
+  =================================================================================
+
+  Вот безопасный порядок действий, чтобы удалить старые контейнеры, образы и кэш Docker на вашем сервере.
+
+Остановить стек
+
+- Перейдите в директорию проекта (если вы уже в /opt/speaking_diary , пропустите):
+  - cd /opt/speaking_diary
+- Остановить и убрать контейнеры (сохранить данные БД):
+  - docker-compose -f docker_compose.prod.yml down --remove-orphans
+  - Альтернатива для Compose v2: docker compose -f docker_compose.prod.yml down --remove-orphans
+- Если хочется удалить и связанные именованные тома (внимание: это удалит данные, например PostgreSQL):
+  - docker-compose -f docker_compose.prod.yml down -v
+  - Используйте только если точно не нужны данные.
+Очистить неиспользуемое
+
+- Общая очистка неиспользуемых контейнеров/образов/сетей/кэша:
+  - docker system prune -a -f
+- Очистить кэш билда (BuildKit и старый билд-кэш):
+  - docker builder prune -a -f
+- Дополнительно (если хотите по отдельности):
+  - Удалить остановленные контейнеры: docker container prune -f
+  - Удалить неиспользуемые образы: docker image prune -a -f
+  - Удалить неиспользуемые сети: docker network prune -f
+  - Удалить неиспользуемые тома: docker volume prune -f (будьте осторожны — удаляет данные)
+Проверить результат
+
+- Посмотреть, сколько места занято/освобождено:
+  - docker system df
+- Убедиться, что лишних образов нет:
+  - docker images
+- Убедиться, что нет лишних контейнеров:
+  - docker ps -a
+Пересобрать начисто
+
+- Обновить и поднять продакшен заново:
+  - docker-compose -f docker_compose.prod.yml up -d --build
+- Если хотите полностью без использования кэша:
+  - docker-compose -f docker_compose.prod.yml build --no-cache
+  - docker-compose -f docker_compose.prod.yml up -d
+- Для Compose v2 используйте docker compose в тех же командах.
+Замечания
+
+- Если у вас есть том для Postgres (например db ), не используйте down -v , чтобы не потерять данные. Проверьте раздел volumes: в docker_compose.prod.yml — там видно, какие тома созданы.
+- Если образов много из-за частых сборок, периодически docker system prune -a и docker builder prune -a сильно помогают.
+- После перезапуска проверьте статус:
+  - docker ps
+  - Логи: docker logs diary_backend и docker logs diary_caddy (имена сервисов смотрите в docker_compose.prod.yml ).

@@ -21,12 +21,97 @@ const DiaryApp = () => {
   const [explainModal, setExplainModal] = useState({ visible: false, html: '' });
   const [settingsModal, setSettingsModal] = useState(false);
   const [pendingLang, setPendingLang] = useState(lang);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [auth, setAuth] = useState(() => {
+    try {
+      const activeKey = localStorage.getItem('auth_active') || '';
+      const map = JSON.parse(localStorage.getItem('auth_accounts') || '{}');
+      return activeKey && map[activeKey] ? map[activeKey] : null;
+    } catch { return null; }
+  });
   
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const audioRef = useRef(null);
   const streamRef = useRef(null);
+
+  // Authentication helpers (multi-account)
+  const loadAccounts = () => {
+    try { return JSON.parse(localStorage.getItem('auth_accounts') || '{}'); } catch { return {}; }
+  };
+  const saveAccounts = (obj) => {
+    try { localStorage.setItem('auth_accounts', JSON.stringify(obj)); } catch {}
+  };
+  const setActiveAccount = (key) => { try { localStorage.setItem('auth_active', key || ''); } catch {} };
+  const activeToken = () => {
+    try {
+      const activeKey = localStorage.getItem('auth_active');
+      const map = loadAccounts();
+      return activeKey && map[activeKey] ? map[activeKey].access_token : null;
+    } catch { return null; }
+  };
+  const authFetch = async (url, options = {}) => {
+    const token = activeToken();
+    const headers = new Headers(options.headers || {});
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const resp = await fetch(url, { ...options, headers, credentials: 'include' });
+    if (resp.status === 401) {
+      setAuth(null);
+    }
+    return resp;
+  };
+  const switchAccount = async (key) => {
+    const map = loadAccounts();
+    const rec = map[key];
+    if (!rec) return;
+    try {
+      await fetch(`${API_BASE}/auth/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ access_token: rec.access_token })
+      });
+    } catch {}
+    setActiveAccount(key);
+    setAuth(rec);
+    await loadEntries();
+  };
+  const logout = async () => {
+    try { await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' }); } catch {}
+    try { localStorage.removeItem('auth_active'); } catch {}
+    setAuth(null);
+  };
+  const storeAccount = (user, token) => {
+    const key = user?.telegram_id ? `tg:${user.telegram_id}` : `id:${user?.id || Date.now()}`;
+    const map = loadAccounts();
+    map[key] = { user, access_token: token, ts: Date.now() };
+    saveAccounts(map);
+    setActiveAccount(key);
+    setAuth(map[key]);
+    return key;
+  };
+  const tryTelegramAuth = async () => {
+    try {
+      const tg = window?.Telegram?.WebApp;
+      const initData = tg?.initData || '';
+      if (!initData) return null;
+      const resp = await fetch(`${API_BASE}/auth/telegram`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ init_data: initData })
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const key = storeAccount(data.user, data.access_token);
+      await loadEntries();
+      return key;
+    } catch (e) {
+      console.warn('Telegram auth failed', e);
+      return null;
+    }
+  };
 
   // Review & Audio storage helpers
   const REVIEW_PREFIX = 'entry_review:';
@@ -121,7 +206,7 @@ const DiaryApp = () => {
         setEntries(prev => prev.filter(e => e.id !== entry.id));
         return;
       }
-      const resp = await fetch(`${API_BASE}/entries/${entry.id}`, { method: 'DELETE' });
+      const resp = await authFetch(`${API_BASE}/entries/${entry.id}`, { method: 'DELETE' });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       removeReview(entry.id);
       removeAudio(entry.id);
@@ -152,11 +237,11 @@ const DiaryApp = () => {
     if (!rev) {
       (async () => {
         try {
-          const resp = await fetch(`${API_BASE}/review`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: entry.text, language: entry.language, ui_language: lang })
-          });
+      const resp = await authFetch(`${API_BASE}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: entry.text, language: entry.language, ui_language: lang })
+      });
           if (resp.ok) {
             const revObj = await resp.json();
             saveReviewForLang(entry.id, { ...revObj, original_text: entry.text }, lang);
@@ -189,7 +274,25 @@ const DiaryApp = () => {
   const closeExplainModal = () => setExplainModal({ visible: false, html: '' });
 
   useEffect(() => {
-    loadEntries();
+    (async () => {
+      const tg = window?.Telegram?.WebApp;
+      if (tg && tg.initData) {
+        await tryTelegramAuth();
+      } else {
+        try {
+          const token = activeToken();
+          if (token) {
+            await fetch(`${API_BASE}/auth/select`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ access_token: token })
+            });
+          }
+        } catch {}
+      }
+      await loadEntries();
+    })();
     return () => {
       stopRecording();
       if (streamRef.current) {
@@ -227,11 +330,11 @@ const DiaryApp = () => {
       } else if (entry) {
         (async () => {
           try {
-            const resp = await fetch(`${API_BASE}/review`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: entry.text, language: entry.language, ui_language: lang })
-            });
+      const resp = await authFetch(`${API_BASE}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: entry.text, language: entry.language, ui_language: lang })
+      });
             if (resp.ok) {
               const revObj = await resp.json();
               saveReviewForLang(entry.id, { ...revObj, original_text: entry.text }, lang);
@@ -265,7 +368,7 @@ const DiaryApp = () => {
 
   const loadEntries = async () => {
     try {
-      const response = await fetch(`${API_BASE}/entries?per_page=50`);
+      const response = await authFetch(`${API_BASE}/entries?per_page=50`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       const serverEntries = (data.entries || []).map(e => {
@@ -300,7 +403,7 @@ const DiaryApp = () => {
     const remaining = [];
     for (const item of offlineEntries) {
       try {
-        const response = await fetch(`${API_BASE}/entries`, {
+        const response = await authFetch(`${API_BASE}/entries`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -314,7 +417,7 @@ const DiaryApp = () => {
         migrateLocalData(item.id, saved.id);
         // После сохранения на сервере запускаем проверку
         try {
-          const revResp = await fetch(`${API_BASE}/review`, {
+          const revResp = await authFetch(`${API_BASE}/review`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text: saved.text, language: saved.language, ui_language: lang })
@@ -434,7 +537,7 @@ const DiaryApp = () => {
       const groqLanguage = languageMap[selectedLanguage] || 'auto';
       formData.append('language', groqLanguage);
       
-      const response = await fetch(`${API_BASE}/transcribe`, {
+      const response = await authFetch(`${API_BASE}/transcribe`, {
         method: 'POST',
         body: formData
       });
@@ -491,7 +594,7 @@ const DiaryApp = () => {
     const timestamp = new Date().toISOString();
 
     try {
-      const response = await fetch(`${API_BASE}/entries`, {
+      const response = await authFetch(`${API_BASE}/entries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -507,7 +610,7 @@ const DiaryApp = () => {
 
       // Проверка и исправление текста через backend
       try {
-        const revResp = await fetch(`${API_BASE}/review`, {
+        const revResp = await authFetch(`${API_BASE}/review`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: saved.text, language: saved.language, ui_language: lang })
@@ -614,7 +717,7 @@ const DiaryApp = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" dir={dir}>
       <div className="bg-black bg-opacity-30 backdrop-blur-md border-b border-purple-500/20">
         <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between relative">
             <button
               className="flex-1 flex justify-start text-purple-300 hover:text-purple-200"
               aria-label={t('modals.ui_language_title')}
@@ -625,7 +728,52 @@ const DiaryApp = () => {
             <h1 className="text-2xl sm:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 text-center">
               {t('header.title')}
             </h1>
-            <div className="flex-1" />
+            <div className="flex-1 flex justify-end">
+              <div className="relative">
+                <button
+                  onClick={() => setAccountMenuOpen(v => !v)}
+                  className="text-xs sm:text-sm px-2 py-1 rounded-md bg-slate-800/60 text-purple-100 border border-purple-500/30 hover:bg-slate-700/60"
+                >
+                  {auth?.user?.username ? `@${auth.user.username}` : (auth?.user?.telegram_id ? `tg:${auth.user.telegram_id}` : (t('actions.sign_in') || 'Войти'))}
+                </button>
+                {accountMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-slate-900/95 border border-purple-500/30 rounded-md shadow-lg z-50 p-2">
+                    <div className="text-xs text-purple-300 mb-1">{t('header.title')} — аккаунты</div>
+                    {Object.entries(loadAccounts()).length ? (
+                      <div className="max-h-60 overflow-auto space-y-1">
+                        {Object.entries(loadAccounts()).map(([key, rec]) => (
+                          <button
+                            key={key}
+                            onClick={() => { setAccountMenuOpen(false); switchAccount(key); }}
+                            className="w-full text-left px-2 py-1.5 rounded hover:bg-purple-500/10 text-purple-100"
+                          >
+                            {rec?.user?.username ? `@${rec.user.username}` : (rec?.user?.telegram_id ? `tg:${rec.user.telegram_id}` : key)}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-purple-300/70 text-sm px-2 py-1.5">{t('actions.no_entries')}</div>
+                    )}
+                    <div className="mt-2 border-t border-purple-500/20 pt-2 flex gap-2">
+                      <button
+                        onClick={async () => { setAccountMenuOpen(false); await tryTelegramAuth(); await loadEntries(); }}
+                        className="flex-1 text-xs px-2 py-1 rounded bg-purple-600 text-white hover:bg-purple-500"
+                      >
+                        Telegram Login
+                      </button>
+                      {auth?.user ? (
+                        <button
+                          onClick={() => { setAccountMenuOpen(false); logout(); }}
+                          className="text-xs px-2 py-1 rounded bg-slate-700 text-purple-100 border border-purple-500/30 hover:bg-slate-600"
+                        >
+                          {t('actions.logout') || 'Выход'}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <p className="text-purple-300/70 text-xs sm:text-sm mt-1 text-center">{t('header.subtitle')}</p>
         </div>
