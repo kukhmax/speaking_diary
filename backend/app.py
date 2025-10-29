@@ -56,7 +56,9 @@ CORS(
     app,
     resources={r"/api/*": {"origins": [
         "https://diary.pw-new.club",
-        "http://diary.pw-new.club"
+        "http://diary.pw-new.club",
+        "https://app.diary.pw-new.club",
+        "http://app.diary.pw-new.club"
     ]}},
     supports_credentials=True,
     allow_headers=["Content-Type", "Authorization"]
@@ -280,12 +282,15 @@ except Exception:
 
 def _set_auth_cookie(resp, token: str):
     secure = (os.getenv('ENV', '').lower() == 'prod') or (os.getenv('ENABLE_SECURE_COOKIE', 'false').lower() == 'true')
+    # В Telegram WebView cookie иногда рассматриваются как кросс-сайтовые.
+    # Если secure включен (прод), используем SameSite=None для совместимости.
+    samesite_mode = 'None' if secure else 'Lax'
     resp.set_cookie(
         'access_token',
         token,
         httponly=True,
         secure=secure,
-        samesite='Lax',
+        samesite=samesite_mode,
         max_age=60*60*24*30
     )
     return resp
