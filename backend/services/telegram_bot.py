@@ -116,6 +116,10 @@ class TelegramBotService:
         self.token = bot_token.strip()
         self.base_url = f"https://api.telegram.org/bot{self.token}"
         self.webapp_url = public_webapp_url.rstrip('/')
+        # Версия фронтенда для кеш-бастинга Telegram WebView
+        # Можно задать через переменную окружения WEBAPP_VERSION/FRONTEND_VERSION
+        # Если не задано, используем номер дня (обновляется раз в сутки)
+        self.version = (os.getenv('WEBAPP_VERSION') or os.getenv('FRONTEND_VERSION') or str(int(time.time() // 86400)))
         self.sessions = SessionStore()
 
     def _post(self, method: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -161,7 +165,7 @@ class TelegramBotService:
         if text.startswith('/start'):
             sess = self.sessions.get_or_create(user_id)
             sess_token = sess['session_token']
-            url = f"{self.webapp_url}?session={sess_token}"
+            url = f"{self.webapp_url}?session={sess_token}&v={self.version}"
             greeting = (
                 "👋 Привет! Я — Speaking Diary в Telegram.\n\n"
                 "✨ Что умею:\n"

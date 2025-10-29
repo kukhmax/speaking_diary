@@ -13,9 +13,11 @@
 - `TELEGRAM_BOT_TOKEN` — токен бота от @BotFather
 - `PUBLIC_WEBAPP_URL` — публичный URL веб‑приложения (например, `https://diary.pw-new.club/`)
 - `TELEGRAM_WEBHOOK_SECRET` — необязательный секрет для защиты вебхука (рекомендуется)
+ - `WEBAPP_VERSION` — версия фронтенда для кеш‑бастинга Telegram WebView (рекомендуется). Если не указать, сервис добавит параметр `v=<номер_дня>` и версия будет меняться раз в сутки.
 
 Что умеет
 - `/start` — создаёт или восстанавливает сессию пользователя Telegram и отправляет кнопку «Открыть приложение» (Mini App). В URL мини‑аппа добавляется `?session=<token>`.
+  Кроме того, добавляется параметр `v=<версия>` для обхода кеша Telegram.
 - Персональные сессии — хранятся в `backend/data/telegram_sessions.json` (JSON), содержат `session_token`, `created_at`, `last_seen` и массив примерных `notes`. Сессии пользователей не пересекаются.
 - Эндпоинты для заметок — `/api/telegram/notes` позволяют сохранять и получать простые заметки, привязанные к `session_token`.
 
@@ -34,7 +36,7 @@
 ```
 {
   "inline_keyboard": [[
-    { "text": "Открыть приложение", "web_app": { "url": "https://diary.pw-new.club/?session=<token>" } }
+    { "text": "Открыть приложение", "web_app": { "url": "https://diary.pw-new.club/?session=<token>&v=<version>" } }
   ]]
 }
 ```
@@ -48,6 +50,7 @@
      - `TELEGRAM_BOT_TOKEN=<вставьте токен>`
      - `PUBLIC_WEBAPP_URL=https://diary.pw-new.club/` (или ваш домен)
      - `TELEGRAM_WEBHOOK_SECRET=<случайная‑строка>`
+     - `WEBAPP_VERSION=<например 2025-10-29>` — обновляйте при каждом релизе фронтенда, чтобы Telegram гарантированно загрузил свежую сборку.
 
      ```
      Что это
