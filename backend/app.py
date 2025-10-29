@@ -2,6 +2,7 @@
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, ForeignKey, text, BigInteger
+from sqlalchemy import exc as sa_exc
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import inspect
@@ -134,7 +135,15 @@ class Entry(Base):
         }
 
 def _ensure_schema():
-    Base.metadata.create_all(bind=engine)
+    # Create tables if needed; guard against rare pg composite type name clashes
+    try:
+        Base.metadata.create_all(bind=engine)
+    except sa_exc.IntegrityError as e:
+        msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        if 'pg_type_typname_nsp_index' in msg:
+            print('[DB] WARNING: Skipping create_all due to existing composite type name clash; schema likely present')
+        else:
+            raise
     # Add column entry.user_id if not exists (simple migration)
     inspector = inspect(engine)
     try:
