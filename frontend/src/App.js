@@ -113,6 +113,29 @@ const DiaryApp = () => {
     }
   };
 
+  // Fallback: авторизация по токену сессии, переданному через параметр URL (?session=...)
+  const tryTelegramSessionAuth = async () => {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      const session = params.get('session');
+      if (!session) return null;
+      const resp = await fetch(`${API_BASE}/auth/telegram/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ session })
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const key = storeAccount(data.user, data.access_token);
+      await loadEntries();
+      return key;
+    } catch (e) {
+      console.warn('Telegram session auth failed', e);
+      return null;
+    }
+  };
+
   // Review & Audio storage helpers
   const REVIEW_PREFIX = 'entry_review:';
   const AUDIO_PREFIX = 'entry_audio:';
@@ -277,19 +300,27 @@ const DiaryApp = () => {
     (async () => {
       const tg = window?.Telegram?.WebApp;
       if (tg && tg.initData) {
-        await tryTelegramAuth();
+        const ok = await tryTelegramAuth();
+        if (!ok) {
+          // Если проверка initData не прошла (например, неверный токен бота на бэкенде), пробуем session
+          await tryTelegramSessionAuth();
+        }
       } else {
-        try {
-          const token = activeToken();
-          if (token) {
-            await fetch(`${API_BASE}/auth/select`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({ access_token: token })
-            });
-          }
-        } catch {}
+        // Открытие вне Telegram: пробуем session, затем восстановление локального токена
+        const sessOk = await tryTelegramSessionAuth();
+        if (!sessOk) {
+          try {
+            const token = activeToken();
+            if (token) {
+              await fetch(`${API_BASE}/auth/select`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ access_token: token })
+              });
+            }
+          } catch {}
+        }
       }
       await loadEntries();
     })();
