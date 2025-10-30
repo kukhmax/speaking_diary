@@ -44,6 +44,7 @@ const DiaryApp = () => {
     try { localStorage.setItem('auth_accounts', JSON.stringify(obj)); } catch {}
   };
   const setActiveAccount = (key) => { try { localStorage.setItem('auth_active', key || ''); } catch {} };
+  const CLIENT_VERSION = process.env.REACT_APP_VERSION || '';
   const activeToken = () => {
     try {
       const activeKey = localStorage.getItem('auth_active');
@@ -55,7 +56,11 @@ const DiaryApp = () => {
     const token = activeToken();
     const headers = new Headers(options.headers || {});
     if (token) headers.set('Authorization', `Bearer ${token}`);
-    const resp = await fetch(url, { ...options, headers, credentials: 'include' });
+    // Боремся с агрессивным кешем WebView/браузеров
+    headers.set('Cache-Control', 'no-cache');
+    headers.set('Pragma', 'no-cache');
+    if (CLIENT_VERSION) headers.set('X-Client-Version', CLIENT_VERSION);
+    const resp = await fetch(url, { ...options, headers, credentials: 'include', cache: 'no-store' });
     if (resp.status === 401) {
       setAuth(null);
     }
@@ -100,6 +105,7 @@ const DiaryApp = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        cache: 'no-store',
         body: JSON.stringify({ init_data: initData })
       });
       if (!resp.ok) return null;
@@ -123,6 +129,7 @@ const DiaryApp = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        cache: 'no-store',
         body: JSON.stringify({ session })
       });
       if (!resp.ok) return null;
@@ -134,6 +141,52 @@ const DiaryApp = () => {
       console.warn('Telegram session auth failed', e);
       return null;
     }
+  };
+
+  // Гарантируем аутентификацию перед загрузкой данных
+  const ensureAuthenticated = async () => {
+    try {
+      const me = await fetch(`${API_BASE}/auth/me`, { credentials: 'include', cache: 'no-store' });
+      if (me.ok) {
+        const info = await me.json();
+        if (info?.authenticated) {
+          if (!auth) setAuth({ user: info.user, access_token: activeToken() });
+          return true;
+        }
+      }
+    } catch {}
+    // Пытаемся авторизоваться через Telegram WebApp
+    const tg = window?.Telegram?.WebApp;
+    if (tg && tg.initData) {
+      const ok = await tryTelegramAuth();
+      if (ok) return true;
+      const sessOk = await tryTelegramSessionAuth();
+      if (sessOk) return true;
+    } else {
+      // Вне Telegram: пробуем локальный токен
+      const token = activeToken();
+      if (token) {
+        try {
+          await fetch(`${API_BASE}/auth/select`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            cache: 'no-store',
+            body: JSON.stringify({ access_token: token })
+          });
+        } catch {}
+        try {
+          const me2 = await fetch(`${API_BASE}/auth/me`, { credentials: 'include', cache: 'no-store' });
+          if (me2.ok) {
+            const info2 = await me2.json();
+            if (info2?.authenticated) return true;
+          }
+        } catch {}
+      }
+      const sessOk2 = await tryTelegramSessionAuth();
+      if (sessOk2) return true;
+    }
+    return false;
   };
 
   // Review & Audio storage helpers
@@ -298,30 +351,7 @@ const DiaryApp = () => {
 
   useEffect(() => {
     (async () => {
-      const tg = window?.Telegram?.WebApp;
-      if (tg && tg.initData) {
-        const ok = await tryTelegramAuth();
-        if (!ok) {
-          // Если проверка initData не прошла (например, неверный токен бота на бэкенде), пробуем session
-          await tryTelegramSessionAuth();
-        }
-      } else {
-        // Открытие вне Telegram: пробуем session, затем восстановление локального токена
-        const sessOk = await tryTelegramSessionAuth();
-        if (!sessOk) {
-          try {
-            const token = activeToken();
-            if (token) {
-              await fetch(`${API_BASE}/auth/select`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ access_token: token })
-              });
-            }
-          } catch {}
-        }
-      }
+      await ensureAuthenticated();
       await loadEntries();
     })();
     return () => {
@@ -399,7 +429,11 @@ const DiaryApp = () => {
 
   const loadEntries = async () => {
     try {
-      const response = await authFetch(`${API_BASE}/entries?per_page=50`);
+      let response = await authFetch(`${API_BASE}/entries?per_page=50`);
+      if (response.status === 401) {
+        const ok = await ensureAuthenticated();
+        if (ok) response = await authFetch(`${API_BASE}/entries?per_page=50`);
+      }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       const serverEntries = (data.entries || []).map(e => {
@@ -434,7 +468,7 @@ const DiaryApp = () => {
     const remaining = [];
     for (const item of offlineEntries) {
       try {
-        const response = await authFetch(`${API_BASE}/entries`, {
+        let response = await authFetch(`${API_BASE}/entries`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -443,6 +477,20 @@ const DiaryApp = () => {
             audio_duration: item.duration
           })
         });
+        if (response.status === 401) {
+          const ok = await ensureAuthenticated();
+          if (ok) {
+            response = await authFetch(`${API_BASE}/entries`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: item.text,
+                language: item.language,
+                audio_duration: item.duration
+              })
+            });
+          }
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const saved = await response.json();
         migrateLocalData(item.id, saved.id);

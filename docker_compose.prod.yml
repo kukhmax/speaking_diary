@@ -53,6 +53,7 @@ services:
       dockerfile: Dockerfile
       args:
         REACT_APP_API_URL: /api
+        REACT_APP_VERSION: ${WEBAPP_VERSION}
     container_name: diary_frontend
     restart: always
     depends_on:
