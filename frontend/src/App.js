@@ -765,7 +765,7 @@ const DiaryApp = () => {
                   onClick={() => setAccountMenuOpen(v => !v)}
                   className="text-xs sm:text-sm px-2 py-1 rounded-md bg-slate-800/60 text-purple-100 border border-purple-500/30 hover:bg-slate-700/60"
                 >
-                  {auth?.user?.username ? `@${auth.user.username}` : (auth?.user?.telegram_id ? `tg:${auth.user.telegram_id}` : (t('actions.sign_in') || 'Войти'))}
+                  {auth?.user?.username ? `@${auth.user.username}` : (t('actions.sign_in') || 'Войти')}
                 </button>
                 {accountMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-slate-900/95 border border-purple-500/30 rounded-md shadow-lg z-50 p-2">
@@ -1119,6 +1119,11 @@ const DiaryApp = () => {
                     {t('modals.apply')}
                   </button>
                 </div>
+                {auth?.user?.telegram_id ? (
+                  <div className="mt-3 text-center text-xs text-purple-300/60">
+                    Telegram ID: {auth.user.telegram_id}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
