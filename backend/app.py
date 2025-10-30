@@ -498,15 +498,15 @@ def transcribe_audio():
 def get_entries():
     try:
         db = SessionLocal()
-        # Временно отключаем аутентификацию для совместимости
-        # user = get_current_user(db, request)
-        # if not user:
-        #     return jsonify({'error': 'Unauthorized'}), 401
+        # Требуем аутентификацию и фильтруем по текущему пользователю
+        user = get_current_user(db, request)
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         language = request.args.get('language')
         
-        query = db.query(Entry)
+        query = db.query(Entry).filter(Entry.user_id == user.id)
         
         if language:
             query = query.filter(Entry.language == language)
@@ -538,15 +538,15 @@ def create_entry():
             return jsonify({'error': 'Text is required'}), 400
         
         db = SessionLocal()
-        # Временно отключаем аутентификацию для совместимости
-        # user = get_current_user(db, request)
-        # if not user:
-        #     return jsonify({'error': 'Unauthorized'}), 401
+        # Требуем аутентификацию и привязываем запись к пользователю
+        user = get_current_user(db, request)
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
         entry = Entry(
             text=data['text'],
             language=data.get('language', 'unknown'),
-            audio_duration=data.get('audio_duration')
-            # user_id=user.id  # Временно убираем привязку к пользователю
+            audio_duration=data.get('audio_duration'),
+            user_id=user.id
         )
         
         db.add(entry)
@@ -565,11 +565,11 @@ def create_entry():
 def get_entry(entry_id):
     try:
         db = SessionLocal()
-        # Временно отключаем аутентификацию для совместимости
-        # user = get_current_user(db, request)
-        # if not user:
-        #     return jsonify({'error': 'Unauthorized'}), 401
-        entry = db.query(Entry).filter(Entry.id == entry_id).first()
+        # Требуем аутентификацию и проверяем владение записью
+        user = get_current_user(db, request)
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        entry = db.query(Entry).filter(Entry.id == entry_id, Entry.user_id == user.id).first()
         
         if not entry:
             return jsonify({'error': 'Entry not found'}), 404
@@ -590,11 +590,11 @@ def update_entry(entry_id):
             return jsonify({'error': 'No data provided'}), 400
         
         db = SessionLocal()
-        # Временно отключаем аутентификацию для совместимости
-        # user = get_current_user(db, request)
-        # if not user:
-        #     return jsonify({'error': 'Unauthorized'}), 401
-        entry = db.query(Entry).filter(Entry.id == entry_id).first()
+        # Требуем аутентификацию и проверяем владение записью
+        user = get_current_user(db, request)
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        entry = db.query(Entry).filter(Entry.id == entry_id, Entry.user_id == user.id).first()
         
         if not entry:
             return jsonify({'error': 'Entry not found'}), 404
@@ -621,11 +621,11 @@ def update_entry(entry_id):
 def delete_entry(entry_id):
     try:
         db = SessionLocal()
-        # Временно отключаем аутентификацию для совместимости
-        # user = get_current_user(db, request)
-        # if not user:
-        #     return jsonify({'error': 'Unauthorized'}), 401
-        entry = db.query(Entry).filter(Entry.id == entry_id).first()
+        # Требуем аутентификацию и проверяем владение записью
+        user = get_current_user(db, request)
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+        entry = db.query(Entry).filter(Entry.id == entry_id, Entry.user_id == user.id).first()
         
         if not entry:
             return jsonify({'error': 'Entry not found'}), 404
@@ -650,11 +650,12 @@ def search_entries():
             return jsonify({'error': 'Search query is required'}), 400
         
         db = SessionLocal()
-        # Временно отключаем аутентификацию для совместимости
-        # user = get_current_user(db, request)
-        # if not user:
-        #     return jsonify({'error': 'Unauthorized'}), 401
+        # Требуем аутентификацию и фильтруем по текущему пользователю
+        user = get_current_user(db, request)
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
         entries = db.query(Entry).filter(
+            Entry.user_id == user.id,
             Entry.text.contains(query_text)
         ).order_by(Entry.timestamp.desc()).limit(50).all()
         
