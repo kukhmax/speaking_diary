@@ -761,12 +761,14 @@ const DiaryApp = () => {
             </h1>
             <div className="flex-1 flex justify-end">
               <div className="relative">
-                <button
-                  onClick={() => setAccountMenuOpen(v => !v)}
-                  className="text-xs sm:text-sm px-2 py-1 rounded-md bg-slate-800/60 text-purple-100 border border-purple-500/30 hover:bg-slate-700/60"
-                >
-                  {auth?.user?.username ? `@${auth.user.username}` : (t('actions.sign_in') || 'Войти')}
-                </button>
+                {auth?.user?.username ? (
+                  <button
+                    onClick={() => setAccountMenuOpen(v => !v)}
+                    className="text-xs sm:text-sm px-2 py-1 rounded-md bg-slate-800/60 text-purple-100 border border-purple-500/30 hover:bg-slate-700/60"
+                  >
+                    {`@${auth.user.username}`}
+                  </button>
+                ) : null}
                 {accountMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-slate-900/95 border border-purple-500/30 rounded-md shadow-lg z-50 p-2">
                     <div className="text-xs text-purple-300 mb-1">{t('header.title')} — аккаунты</div>
