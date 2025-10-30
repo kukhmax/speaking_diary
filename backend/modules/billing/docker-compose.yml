@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  billing:
+    build: .
+    container_name: billing_module
+    ports:
+      - "5080:5080"
+    environment:
+      - BILLING_DATABASE_URL=sqlite:////app/data/billing.db
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - PAYMENTS_PROVIDER_TOKEN=${PAYMENTS_PROVIDER_TOKEN}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
+      - PUBLIC_WEBAPP_URL=${PUBLIC_WEBAPP_URL}
+    volumes:
+      - ./data:/app/data

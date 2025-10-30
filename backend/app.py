@@ -99,6 +99,24 @@ DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///diary.db')
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Register Billing module (subscriptions, trial, payments)
+try:
+    from backend.modules.billing import create_billing_blueprint  # type: ignore
+    from backend.modules.billing.service import BillingService  # type: ignore
+except Exception:
+    # Fallback for running as script (python backend/app.py)
+    from modules.billing import create_billing_blueprint  # type: ignore
+    from modules.billing.service import BillingService  # type: ignore
+
+try:
+    billing_bp = create_billing_blueprint(engine)
+    app.register_blueprint(billing_bp, url_prefix='/api/billing')
+    billing_service = BillingService(engine)
+    print("[BILLING] Module registered under /api/billing")
+except Exception as e:
+    billing_service = None
+    print(f"[BILLING] Skipping billing module: {e}")
+
 # Groq client
 groq_client = Groq(api_key=os.getenv('GROQ_API_KEY'))
 
@@ -569,11 +587,14 @@ def get_entry(entry_id):
         user = get_current_user(db, request)
         if not user:
             return jsonify({'error': 'Unauthorized'}), 401
+        # Дополнительная проверка: требуем активную подписку для доступа к записи
+        if billing_service and not billing_service.has_active_access(user.id):
+            return jsonify({'error': 'Subscription required', 'code': 'subscription_required'}), 402
         entry = db.query(Entry).filter(Entry.id == entry_id, Entry.user_id == user.id).first()
-        
+
         if not entry:
             return jsonify({'error': 'Entry not found'}), 404
-        
+
         return jsonify(entry.to_dict())
         
     except Exception as e:
