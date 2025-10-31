@@ -686,6 +686,7 @@ def review_entry():
         corrected_html = _highlight_diff(text, corrected) if is_changed else corrected
         explanations = result.get('explanations', [])
         explanations_html = '<br>'.join(explanations) if explanations else ''
+        ui_translation = result.get('ui_translation') or ''
         # Server-side TTS for corrected phrase
         tts_data_url = synthesize_tts(corrected, result.get('language', language))
 
@@ -697,7 +698,8 @@ def review_entry():
             'explanations_html': explanations_html,
             'is_changed': is_changed,
             'language': result.get('language', language),
-            'tts_audio_data_url': tts_data_url
+            'tts_audio_data_url': tts_data_url,
+            'ui_translation': ui_translation
         })
     except Exception as e:
         print(f"[REVIEW] ERROR: {e}")
@@ -964,8 +966,8 @@ def _build_review_prompt(text: str, language: str, ui_language: str = 'ru'):
     return (
         "Ты опытный преподаватель иностранного языка. Проверь фразу на грамматическую и смысловую корректность, сохраняя исходный смысл. "
         "Если нужны исправления — предоставь исправленный вариант. Ответь строго одним JSON-объектом без Markdown и без пояснений вне JSON. "
-        "Используй ключи: corrected_text (string), explanations (array of strings — пиши пояснения на языке интерфейса), language (string — код языка исходного текста), changed (boolean). "
-        "Если исправлений нет, верни corrected_text равным исходному тексту и changed=false. "
+        "Используй ключи: corrected_text (string), explanations (array of strings — пиши пояснения на языке интерфейса), language (string — код языка исходного текста), changed (boolean), ui_translation (string — перевод corrected_text на язык интерфейса). "
+        "Если исправлений нет, верни corrected_text равным исходному тексту и changed=false. Всегда добавляй ui_translation как перевод corrected_text. "
         f"Язык интерфейса: {ui_label}. Язык фразы: {lang_label}. Фраза: \"\"\"{text}\"\"\""
     )
 
@@ -976,7 +978,8 @@ def review_with_gemini(text: str, language: str, ui_language: str = 'ru'):
             'corrected_text': text,
             'explanations': ['Проверка недоступна: отсутствует ключ Gemini или библиотека.'],
             'language': language,
-            'changed': False
+            'changed': False,
+            'ui_translation': ''
         }
     try:
         model_candidates = ['gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-2.5-flash-latest', 'gemini-2.5-flash']
@@ -997,11 +1000,13 @@ def review_with_gemini(text: str, language: str, ui_language: str = 'ru'):
                 changed = data.get('changed')
                 if changed is None:
                     changed = corrected.strip() != text.strip()
+                ui_translation = data.get('ui_translation') or ''
                 return {
                     'corrected_text': corrected,
                     'explanations': explanations,
                     'language': data.get('language') or language,
-                    'changed': bool(changed)
+                    'changed': bool(changed),
+                    'ui_translation': ui_translation
                 }
             except Exception as e:
                 last_err = e
@@ -1015,7 +1020,8 @@ def review_with_gemini(text: str, language: str, ui_language: str = 'ru'):
             'corrected_text': text,
             'explanations': ['Не удалось выполнить проверку, используем исходный текст.'],
             'language': language,
-            'changed': False
+            'changed': False,
+            'ui_translation': ''
         }
 
 if __name__ == '__main__':

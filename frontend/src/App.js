@@ -304,6 +304,7 @@ const DiaryApp = () => {
         original: rev?.original_text || entry.text,
         correctedHtml: fixHtmlSpaces(rev?.corrected_html) || entry.text,
         correctedText: rev?.corrected_text || entry.text,
+        translationText: rev?.ui_translation || '',
         explanationsHtml: rev?.explanations_html || '',
         audioUri,
         ttsUri: rev?.tts_audio_data_url || null,
@@ -329,6 +330,7 @@ const DiaryApp = () => {
                   ...prev.data,
                   correctedHtml: fixHtmlSpaces(revObj?.corrected_html) || entry.text,
                   correctedText: revObj?.corrected_text || entry.text,
+                  translationText: revObj?.ui_translation || '',
                   explanationsHtml: revObj?.explanations_html || '',
                   ttsUri: revObj?.tts_audio_data_url || null
                 }
@@ -384,6 +386,7 @@ const DiaryApp = () => {
             original: rev?.original_text || entry?.text || prev.data?.original || '',
             correctedHtml: fixHtmlSpaces(rev?.corrected_html) || entry?.text || prev.data?.correctedHtml || '',
             correctedText: rev?.corrected_text || entry?.text || prev.data?.correctedText || '',
+            translationText: rev?.ui_translation || '',
             explanationsHtml: rev?.explanations_html || '',
             ttsUri: rev?.tts_audio_data_url || null
           }
@@ -405,6 +408,7 @@ const DiaryApp = () => {
                   ...prev.data,
                   correctedHtml: fixHtmlSpaces(revObj?.corrected_html) || entry.text,
                   correctedText: revObj?.corrected_text || entry.text,
+                  translationText: revObj?.ui_translation || '',
                   explanationsHtml: revObj?.explanations_html || '',
                   ttsUri: revObj?.tts_audio_data_url || null
                 }
@@ -799,9 +803,7 @@ const DiaryApp = () => {
   const [displayHtml, setDisplayHtml] = useState('');
   const [displayFlagSrc, setDisplayFlagSrc] = useState('/flags/us.svg');
 
-  const TRANSLATION_PREFIX = 'entry_translation:';
-  const saveTranslation = (id, uiLang, obj) => { try { localStorage.setItem(`${TRANSLATION_PREFIX}${id}:${uiLang}`, JSON.stringify(obj)); } catch {} };
-  const loadTranslation = (id, uiLang) => { try { const s = localStorage.getItem(`${TRANSLATION_PREFIX}${id}:${uiLang}`); return s ? JSON.parse(s) : null; } catch { return null; } };
+  // Перевод теперь приходит сразу из /api/review как ui_translation
 
   const getUiFlagSrc = () => {
     const uiCode = uiLocale || 'en-US';
@@ -884,47 +886,26 @@ const DiaryApp = () => {
       });
       return;
     }
-    // Translate to UI language (cache by entryId + ui lang)
-    const entryId = reviewModal.data.entryId;
-    const cached = loadTranslation(entryId, lang);
-    if (cached?.html) {
-      setIsTranslated(true);
-      setDisplayHtml(cached.html);
-      setDisplayFlagSrc(getFlagSrc(reviewModal.data.language));
-      requestAnimationFrame(() => {
-        if (container) container.scrollTop = scrollTop;
-        if (offsets) restoreSelectionOffsets(container, offsets.start, offsets.end);
-      });
+    // Используем готовый перевод из ответа ревью
+    const translation = reviewModal.data.translationText || '';
+    if (!translation.trim()) {
+      alert(t('alerts.translation_failed'));
       return;
     }
-    try {
-      setTranslating(true);
-      const resp = await authFetch(`${API_BASE}/translate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text_html: reviewModal.data.correctedHtml || reviewModal.data.correctedText || '',
-          from_language: reviewModal.data.language || 'auto',
-          to_language: lang
-        })
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      const html = fixHtmlSpaces(data?.translated_text || '');
-      saveTranslation(entryId, lang, { html });
-      setIsTranslated(true);
-      setDisplayHtml(html);
-      setDisplayFlagSrc(getFlagSrc(reviewModal.data.language));
-      requestAnimationFrame(() => {
-        if (container) container.scrollTop = scrollTop;
-        if (offsets) restoreSelectionOffsets(container, offsets.start, offsets.end);
-      });
-    } catch (e) {
-      console.error('Translate failed:', e);
-      alert(t('alerts.translation_failed'));
-    } finally {
-      setTranslating(false);
-    }
+    const escapeHtml = (s) => s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    const html = fixHtmlSpaces(escapeHtml(translation));
+    setIsTranslated(true);
+    setDisplayHtml(html);
+    setDisplayFlagSrc(getFlagSrc(reviewModal.data.language));
+    requestAnimationFrame(() => {
+      if (container) container.scrollTop = scrollTop;
+      if (offsets) restoreSelectionOffsets(container, offsets.start, offsets.end);
+    });
   };
 
   return (
@@ -1237,20 +1218,20 @@ const DiaryApp = () => {
                       )}
                     </div>
                   <div className="relative">
+                    <div
+                      ref={correctedRef}
+                      className={`corrected-text text-purple-100 bg-slate-700/50 rounded-md p-3 pr-10 transition-opacity duration-300 ${translating ? 'opacity-50' : 'opacity-100'}`}
+                      dangerouslySetInnerHTML={{ __html: (isTranslated ? displayHtml : (displayHtml || reviewModal.data?.correctedHtml || '')) }}
+                    />
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); toggleTranslation(); }}
-                      className="absolute -top-2 right-2 z-10 inline-flex items-center justify-center rounded-md border border-purple-500/40 bg-slate-800/70 hover:bg-slate-700/70 shadow-sm transition-colors"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center rounded-md border border-purple-500/40 bg-slate-800/70 hover:bg-slate-700/70 shadow-sm transition-colors"
                       aria-label="Toggle translation"
                       style={{ padding: '2px' }}
                     >
                       <img src={displayFlagSrc} alt="lang" className="h-4 w-6 rounded-sm" />
                     </button>
-                    <div
-                      ref={correctedRef}
-                      className={`corrected-text text-purple-100 bg-slate-700/50 rounded-md p-3 transition-opacity duration-300 ${translating ? 'opacity-50' : 'opacity-100'}`}
-                      dangerouslySetInnerHTML={{ __html: (isTranslated ? displayHtml : (displayHtml || reviewModal.data?.correctedHtml || '')) }}
-                    />
                   </div>
                   {reviewModal.data?.ttsUri && (
                     <div className="mt-3 border-t border-slate-700/60">
