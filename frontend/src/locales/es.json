@@ -30,7 +30,8 @@
     "saved_offline": "Guardado sin conexión. La entrada se sincronizará al restaurar la conexión.",
     "transcription_failed": "La transcripción falló",
     "transcription_error_prefix": "Error de transcripción",
-    "transcription_error_hint": "Revisa el backend y la configuración de Groq API."
+    "transcription_error_hint": "Revisa el backend y la configuración de Groq API.",
+    "translation_failed": "No se pudo traducir el texto"
   },
   "modals": {
     "new_entry": "Nueva entrada",

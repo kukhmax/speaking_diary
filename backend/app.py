@@ -1020,3 +1020,66 @@ def review_with_gemini(text: str, language: str, ui_language: str = 'ru'):
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+#############################################
+# Translation API
+#############################################
+
+def _build_translate_prompt(text: str, from_language: str, to_language: str, fmt: str = 'text'):
+    ui_label = (to_language or 'ru').lower()
+    src_label = (from_language or 'auto').lower()
+    if fmt == 'html':
+        return (
+            "Переведи следующий HTML на указанный язык, сохраняя ВСЕ теги и их порядок без изменений. "
+            "Переводи только текстовое содержимое внутри тегов. Верни строго один результат: готовую HTML-строку без пояснений и Markdown. "
+            f"Язык исходного текста: {src_label}. Целевой язык: {ui_label}. HTML: \n" + text
+        )
+    return (
+        "Переведи следующий текст на указанный язык. Сохрани пунктуацию и форматирование. "
+        "Верни строго одну строку без пояснений и без Markdown." 
+        f" Язык исходного текста: {src_label}. Целевой язык: {ui_label}. Текст: \n" + text
+    )
+
+
+def translate_with_gemini(text: str, from_language: str, to_language: str, fmt: str = 'text'):
+    if not text:
+        return {'translated_text': ''}
+    if not (genai and GEMINI_API_KEY):
+        # Нет ключа/библиотеки — возвращаем ошибку, чтобы UI обработал
+        raise Exception('Translation unavailable: missing API configuration')
+    try:
+        model_candidates = ['gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-2.5-flash-latest', 'gemini-2.5-flash']
+        last_err = None
+        for model_name in model_candidates:
+            try:
+                model = genai.GenerativeModel(model_name)
+                prompt = _build_translate_prompt(text, from_language, to_language, fmt)
+                resp = model.generate_content(prompt)
+                raw = (getattr(resp, 'text', '') or '').strip()
+                # Убираем возможные префиксы/суффиксы, оставляя только содержимое
+                # Для HTML оставляем как есть, для текста — одна строка
+                return {'translated_text': raw}
+            except Exception as e:
+                last_err = e
+                print(f"[TRANSLATE] Gemini model {model_name} error: {e}")
+                continue
+        raise last_err or Exception('Translation failed for all candidate models')
+    except Exception as e:
+        print(f"[TRANSLATE] ERROR: {e}")
+        raise
+
+
+@app.route('/api/translate', methods=['POST'])
+def api_translate():
+    try:
+        payload = request.get_json(silent=True) or {}
+        text = payload.get('text') or payload.get('text_html') or ''
+        fmt = 'html' if 'text_html' in payload else 'text'
+        from_language = payload.get('from_language') or 'auto'
+        to_language = payload.get('to_language') or 'ru'
+        if not text.strip():
+            return jsonify({'error': 'Text is required'}), 400
+        result = translate_with_gemini(text, from_language, to_language, fmt)
+        return jsonify({'translated_text': result.get('translated_text', '')})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

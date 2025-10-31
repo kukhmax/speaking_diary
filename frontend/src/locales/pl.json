@@ -30,7 +30,8 @@
     "saved_offline": "Zapisano offline. Wpis zsynchronizuje się po przywróceniu połączenia.",
     "transcription_failed": "Transkrypcja nie powiodła się",
     "transcription_error_prefix": "Błąd transkrypcji",
-    "transcription_error_hint": "Sprawdź backend i ustawienia Groq API."
+    "transcription_error_hint": "Sprawdź backend i ustawienia Groq API.",
+    "translation_failed": "Nie udało się przetłumaczyć tekstu"
   },
   "modals": {
     "new_entry": "Nowy wpis",
