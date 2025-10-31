@@ -1,6 +1,7 @@
 # Web Framework
 Flask==3.0.0                    # Flask
 Flask-CORS==4.0.0               # CORS для Flask
+requests==2.31.0                 # HTTP-клиент для Telegram API
 
 # Database
 SQLAlchemy==2.0.23              # ORM
@@ -11,6 +12,7 @@ groq==0.33.0                    # Groq
 python-dotenv==1.0.0
 openai==1.3.7
 google-generativeai==0.8.5      # Gemini API
+PyJWT==2.8.0                    # JWT токены для аутентификации
 
 # WSGI Server
 gunicorn==21.2.0                # WSGI сервер

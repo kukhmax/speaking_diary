@@ -57,7 +57,7 @@ networks:
     external: true
     name: web
 ```
-- Пересоберите и поднимите прод-стек Speaking Diary после настроек: `docker compose -f docker_compose_prod.yml up -d --build`
+- Пересоберите и поднимите прод-стек Speaking Diary после настроек: `docker-compose -f docker_compose.prod.yml up -d --build`
 
 Шаг 3. Расширить Caddyfile для двух сайтов
 - Пример конфигурации Caddy (этот репозиторий):
@@ -155,7 +155,7 @@ ss -tulpn | grep -E ":80|:443"
 Проверка
 - Speaking Diary:
   - `curl -I https://diary.pw-new.club`
-  - `docker compose -f docker_compose_prod.yml exec backend curl -s http://localhost:5000/api/health`
+  - `docker compose -f docker_compose.prod.yml exec backend curl -s http://localhost:5000/api/health`
 - TPW:
   - `curl -I https://pw-new.club`
   - `curl -I https://pw.pw-new.club` (если настроен)

@@ -1,3 +1,8 @@
+{
+    email admin@diary.pw-new.club
+    acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
 diary.pw-new.club {
     encode gzip
 
@@ -7,12 +12,35 @@ diary.pw-new.club {
         format json
     }
 
+    # Временный самоподписанный сертификат (до снятия лимита Let's Encrypt)
+    tls /certs/webhook.pem /certs/webhook.key {
+        alpn http/1.1
+    }
+
     # Проксируем API-запросы на backend
     handle /api* {
         reverse_proxy backend:5000
     }
 
     # Все остальные запросы — на фронтенд
+    handle {
+        reverse_proxy frontend:80
+    }
+}
+
+# WebApp — отдельный поддомен с валидным сертификатом (не самоподписанный)
+app.diary.pw-new.club {
+    encode gzip
+
+    log {
+        output stdout
+        format json
+    }
+
+    handle /api* {
+        reverse_proxy backend:5000
+    }
+
     handle {
         reverse_proxy frontend:80
     }
