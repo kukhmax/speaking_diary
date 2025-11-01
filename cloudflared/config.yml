@@ -1,0 +1,12 @@
+## Cloudflare Tunnel config for local Speaking Diary
+tunnel: diary-test
+credentials-file: ./cloudflared/diary-test.json
+
+ingress:
+  - hostname: test.pw-new.club
+    service: http://localhost:80
+  - hostname: app.test.pw-new.club
+    service: http://localhost:80
+  - service: http_status:404
+
+metrics: localhost:6060
