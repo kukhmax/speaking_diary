@@ -39,6 +39,7 @@
     "original_text": "Исходный текст",
     "corrected_text": "Исправленный текст",
     "explanations": "Пояснения",
+    "translate": "Перевод",
     "tts_title": "Озвучка",
     "open_explanations_aria": "Открыть пояснения",
     "ui_language_title": "Язык интерфейса",

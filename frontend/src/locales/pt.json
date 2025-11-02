@@ -39,6 +39,7 @@
     "original_text": "Texto original",
     "corrected_text": "Texto corrigido",
     "explanations": "Explicações",
+    "translate": "Traduzir",
     "tts_title": "Áudio TTS",
     "open_explanations_aria": "Abrir explicações",
     "ui_language_title": "Idioma da interface",

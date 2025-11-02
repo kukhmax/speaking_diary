@@ -1235,39 +1235,43 @@ const DiaryApp = () => {
                       >
                         <Play size={16} /> {t('tts.speak_browser')}
                       </button>
-                      {reviewModal.data?.explanationsHtml && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); openExplainModal(reviewModal.data.explanationsHtml); }}
-                          className="ml-auto inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-purple-600 text-white text-sm hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
-                          aria-label={t('modals.open_explanations_aria')}
-                        >
-                          {t('modals.explanations')}
-                        </button>
-                      )}
+                      <div className="ml-auto flex items-center gap-2">
+                        {reviewModal.data?.explanationsHtml && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openExplainModal(reviewModal.data.explanationsHtml); }}
+                            className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-purple-600 text-white text-sm hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
+                            aria-label={t('modals.open_explanations_aria')}
+                          >
+                            {t('modals.explanations')}
+                          </button>
+                        )}
+                        {reviewModal.data && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); toggleTranslation(); }}
+                            className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-800/70 text-purple-100 text-sm border border-purple-500/40 hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
+                            aria-label="Toggle translation"
+                          >
+                            <img src={displayFlagSrc} alt="lang" className="h-4 w-6 rounded-sm mr-2" />
+                            {t('modals.translate')}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  <div className="relative">
+                  <div>
                     <div
                       ref={correctedRef}
-                      className={`corrected-text text-purple-100 bg-slate-700/50 rounded-md p-3 pr-10 transition-opacity duration-300 ${translating ? 'opacity-50' : 'opacity-100'}`}
+                      className={`corrected-text text-purple-100 bg-slate-700/50 rounded-md p-3 transition-opacity duration-300 ${translating ? 'opacity-50' : 'opacity-100'}`}
                       dangerouslySetInnerHTML={{ __html: (isTranslated ? displayHtml : (displayHtml || reviewModal.data?.correctedHtml || '')) }}
                     />
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); toggleTranslation(); }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center rounded-md border border-purple-500/40 bg-slate-800/70 hover:bg-slate-700/70 shadow-sm transition-colors"
-                      aria-label="Toggle translation"
-                      style={{ padding: '2px' }}
-                    >
-                      <img src={displayFlagSrc} alt="lang" className="h-4 w-6 rounded-sm" />
-                    </button>
                   </div>
-                  {reviewModal.data?.ttsUri && (
-                    <div className="mt-3 border-t border-slate-700/60">
-                      <audio controls src={reviewModal.data.ttsUri} className="w-full audio-compact" />
-                    </div>
-                  )}
-                </div>
+                {reviewModal.data?.ttsUri && (
+                  <div className="mt-3 border-t border-slate-700/60">
+                    <audio controls src={reviewModal.data.ttsUri} className="w-full audio-compact" />
+                  </div>
+                )}
+              </div>
               </div>
             </div>
           </div>
