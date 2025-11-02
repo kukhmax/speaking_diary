@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "start": "expo start",
+    "start:lan": "expo start --lan",
+    "start:tunnel": "expo start --tunnel",
     "android": "expo run:android",
     "lint": "tsc --noEmit"
   },
