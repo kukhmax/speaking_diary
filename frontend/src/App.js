@@ -1246,17 +1246,6 @@ const DiaryApp = () => {
                             {t('modals.explanations')}
                           </button>
                         )}
-                        {reviewModal.data && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); toggleTranslation(); }}
-                            className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-800/70 text-purple-100 text-sm border border-purple-500/40 hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
-                            aria-label="Toggle translation"
-                          >
-                            <img src={displayFlagSrc} alt="lang" className="h-4 w-6 rounded-sm mr-2" />
-                            {t('modals.translate')}
-                          </button>
-                        )}
                       </div>
                     </div>
                   <div>
@@ -1265,6 +1254,19 @@ const DiaryApp = () => {
                       className={`corrected-text text-purple-100 bg-slate-700/50 rounded-md p-3 transition-opacity duration-300 ${translating ? 'opacity-50' : 'opacity-100'}`}
                       dangerouslySetInnerHTML={{ __html: (isTranslated ? displayHtml : (displayHtml || reviewModal.data?.correctedHtml || '')) }}
                     />
+                    {reviewModal.data && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleTranslation(); }}
+                          className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-800/70 text-purple-100 text-sm border border-purple-500/40 hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
+                          aria-label="Toggle translation"
+                        >
+                          <span>{t('modals.translate')}</span>
+                          <img src={displayFlagSrc} alt="lang" className="h-4 w-6 rounded-sm ml-2" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 {reviewModal.data?.ttsUri && (
                   <div className="mt-3 border-t border-slate-700/60">
