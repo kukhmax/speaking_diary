@@ -7,6 +7,7 @@
     "start:lan": "expo start --lan",
     "start:tunnel": "expo start --tunnel",
     "android": "expo run:android",
+    "web": "expo start --web",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
