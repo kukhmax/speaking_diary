@@ -1262,7 +1262,7 @@ const DiaryApp = () => {
                           className="inline-flex items-center justify-center px-2.5 py-1 rounded-md bg-slate-800/70 text-purple-100 text-sm border border-purple-500/40 hover:bg-slate-700/70 focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-sm"
                           aria-label="Toggle translation"
                         >
-                          <span>{t('modals.translate')}</span>
+                          <span>{isTranslated ? t('modals.original') : t('modals.translate')}</span>
                           <img src={displayFlagSrc} alt="lang" className="h-4 w-6 rounded-sm ml-2" />
                         </button>
                       </div>

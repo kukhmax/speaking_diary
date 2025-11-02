@@ -39,6 +39,7 @@
     "original_text": "Texte original",
     "corrected_text": "Texte corrigé",
     "explanations": "Explications",
+    "original": "Original",
     "translate": "Traduire",
     "tts_title": "Synthèse vocale",
     "open_explanations_aria": "Ouvrir les explications",
