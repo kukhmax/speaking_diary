@@ -1,6 +1,8 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 
-const API_BASE = process.env.API_BASE || 'https://app.diary.pw-new.club/api';
+const extra = (Constants.expoConfig?.extra || {}) as { apiBase?: string };
+const API_BASE = extra.apiBase || 'https://app.diary.pw-new.club/api';
 
 export const api = axios.create({
   baseURL: API_BASE,
