@@ -1,12 +1,17 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, Button } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation';
 import { Audio } from 'expo-av';
 import { useTranslation } from 'react-i18next';
+import { transcribeAudio } from '../api/transcribe';
 
 export default function Record() {
   const { t } = useTranslation();
   const recordingRef = useRef<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const startRecording = async () => {
     const { granted } = await Audio.requestPermissionsAsync();
@@ -25,8 +30,14 @@ export default function Record() {
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
     setIsRecording(false);
-    // TODO: upload to /api/transcribe with UI language
-    console.log('Recorded file:', uri);
+    if (!uri) return;
+    try {
+      const res = await transcribeAudio(uri, 'auto');
+      const text = res?.text || '';
+      navigation.navigate('Review', { text });
+    } catch (e) {
+      console.log('Transcribe error', e);
+    }
   };
 
   return (

@@ -8,7 +8,7 @@ import Settings from '../screens/Settings';
 export type RootStackParamList = {
   Home: undefined;
   Record: undefined;
-  Review: { entryId?: string } | undefined;
+  Review: { entryId?: string; text?: string } | undefined;
   Settings: undefined;
 };
 
