@@ -1,0 +1,13 @@
+{
+  "home.title": "Voice Diary",
+  "home.record": "Record",
+  "home.review": "Review",
+  "home.settings": "Settings",
+  "record.title": "Record your voice",
+  "record.start": "Start Recording",
+  "record.stop": "Stop Recording",
+  "review.title": "Review",
+  "review.placeholder": "Corrections and explanations will appear here.",
+  "settings.title": "Settings",
+  "settings.language": "Interface language"
+}

@@ -1,0 +1,13 @@
+{
+  "home.title": "Голосовой дневник",
+  "home.record": "Запись",
+  "home.review": "Ревью",
+  "home.settings": "Настройки",
+  "record.title": "Запишите свой голос",
+  "record.start": "Начать запись",
+  "record.stop": "Остановить запись",
+  "review.title": "Ревью",
+  "review.placeholder": "Здесь появятся исправления и пояснения.",
+  "settings.title": "Настройки",
+  "settings.language": "Язык интерфейса"
+}
