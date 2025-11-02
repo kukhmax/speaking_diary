@@ -304,6 +304,7 @@ const DiaryApp = () => {
         original: rev?.original_text || entry.text,
         correctedHtml: fixHtmlSpaces(rev?.corrected_html) || entry.text,
         correctedText: rev?.corrected_text || entry.text,
+        translationText: rev?.ui_translation || '',
         explanationsHtml: rev?.explanations_html || '',
         audioUri,
         ttsUri: rev?.tts_audio_data_url || null,
@@ -329,6 +330,7 @@ const DiaryApp = () => {
                   ...prev.data,
                   correctedHtml: fixHtmlSpaces(revObj?.corrected_html) || entry.text,
                   correctedText: revObj?.corrected_text || entry.text,
+                  translationText: revObj?.ui_translation || '',
                   explanationsHtml: revObj?.explanations_html || '',
                   ttsUri: revObj?.tts_audio_data_url || null
                 }
@@ -384,6 +386,7 @@ const DiaryApp = () => {
             original: rev?.original_text || entry?.text || prev.data?.original || '',
             correctedHtml: fixHtmlSpaces(rev?.corrected_html) || entry?.text || prev.data?.correctedHtml || '',
             correctedText: rev?.corrected_text || entry?.text || prev.data?.correctedText || '',
+            translationText: rev?.ui_translation || '',
             explanationsHtml: rev?.explanations_html || '',
             ttsUri: rev?.tts_audio_data_url || null
           }
@@ -405,6 +408,7 @@ const DiaryApp = () => {
                   ...prev.data,
                   correctedHtml: fixHtmlSpaces(revObj?.corrected_html) || entry.text,
                   correctedText: revObj?.corrected_text || entry.text,
+                  translationText: revObj?.ui_translation || '',
                   explanationsHtml: revObj?.explanations_html || '',
                   ttsUri: revObj?.tts_audio_data_url || null
                 }
@@ -792,6 +796,118 @@ const DiaryApp = () => {
     { code: 'pl-PL', name: 'Polski', flagSrc: '/flags/pl.svg' }
   ];
 
+  // --- Translation toggle state for review modal ---
+  const correctedRef = useRef(null);
+  const [isTranslated, setIsTranslated] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [displayHtml, setDisplayHtml] = useState('');
+  const [displayFlagSrc, setDisplayFlagSrc] = useState('/flags/us.svg');
+
+  // Перевод теперь приходит сразу из /api/review как ui_translation
+
+  const getUiFlagSrc = () => {
+    const uiCode = uiLocale || 'en-US';
+    return getFlagSrc(uiCode);
+  };
+
+  // Initialize displayed HTML/flag when modal opens or content changes
+  useEffect(() => {
+    if (reviewModal.visible) {
+      const html = fixHtmlSpaces(reviewModal.data?.correctedHtml) || '';
+      setDisplayHtml(html);
+      setIsTranslated(false);
+      setDisplayFlagSrc(getUiFlagSrc());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewModal.visible, reviewModal.data?.correctedHtml, uiLocale]);
+
+  // Helpers to preserve selection/caret inside corrected text container
+  const getTextNodes = (node) => {
+    const nodes = [];
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null);
+    let n = walker.nextNode();
+    while (n) { nodes.push(n); n = walker.nextNode(); }
+    return nodes;
+  };
+  const getSelectionOffsets = (container) => {
+    try {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return null;
+      const range = sel.getRangeAt(0);
+      if (!container || (!container.contains(range.startContainer) && !container.contains(range.endContainer))) return null;
+      const texts = getTextNodes(container);
+      let start = 0, end = 0, acc = 0;
+      for (const tn of texts) {
+        if (tn === range.startContainer) start = acc + range.startOffset;
+        if (tn === range.endContainer) end = acc + range.endOffset;
+        acc += (tn.textContent || '').length;
+      }
+      return { start, end };
+    } catch { return null; }
+  };
+  const restoreSelectionOffsets = (container, start, end) => {
+    try {
+      const texts = getTextNodes(container);
+      const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+      const total = texts.reduce((s, n) => s + (n.textContent || '').length, 0);
+      const sIdx = clamp(start, 0, total);
+      const eIdx = clamp(end, 0, total);
+      let acc = 0;
+      let sNode = texts[0], sOff = 0;
+      let eNode = texts[0], eOff = 0;
+      for (const tn of texts) {
+        const len = (tn.textContent || '').length;
+        if (acc + len >= sIdx && !sNode) { sNode = tn; sOff = sIdx - acc; }
+        if (acc + len >= eIdx && !eNode) { eNode = tn; eOff = eIdx - acc; }
+        acc += len;
+      }
+      const range = document.createRange();
+      range.setStart(sNode || texts[0], sOff);
+      range.setEnd(eNode || texts[0], eOff);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch {}
+  };
+
+  const toggleTranslation = async () => {
+    const container = correctedRef.current;
+    const offsets = getSelectionOffsets(container);
+    const scrollTop = container ? container.scrollTop : 0;
+    if (!reviewModal.data) return;
+    if (isTranslated) {
+      // Revert to original
+      setIsTranslated(false);
+      setDisplayHtml(fixHtmlSpaces(reviewModal.data.correctedHtml) || '');
+      setDisplayFlagSrc(getUiFlagSrc());
+      requestAnimationFrame(() => {
+        if (container) container.scrollTop = scrollTop;
+        if (offsets) restoreSelectionOffsets(container, offsets.start, offsets.end);
+      });
+      return;
+    }
+    // Используем готовый перевод из ответа ревью
+    const translation = reviewModal.data.translationText || '';
+    if (!translation.trim()) {
+      alert(t('alerts.translation_failed'));
+      return;
+    }
+    const escapeHtml = (s) => s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    const html = fixHtmlSpaces(escapeHtml(translation));
+    setIsTranslated(true);
+    setDisplayHtml(html);
+    setDisplayFlagSrc(getFlagSrc(reviewModal.data.language));
+    requestAnimationFrame(() => {
+      if (container) container.scrollTop = scrollTop;
+      if (offsets) restoreSelectionOffsets(container, offsets.start, offsets.end);
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" dir={dir}>
       <div className="bg-black bg-opacity-30 backdrop-blur-md border-b border-purple-500/20">
@@ -1101,7 +1217,22 @@ const DiaryApp = () => {
                         </button>
                       )}
                     </div>
-                  <div className="corrected-text text-purple-100 bg-slate-700/50 rounded-md p-3" dangerouslySetInnerHTML={{ __html: reviewModal.data?.correctedHtml || '' }} />
+                  <div className="relative">
+                    <div
+                      ref={correctedRef}
+                      className={`corrected-text text-purple-100 bg-slate-700/50 rounded-md p-3 pr-10 transition-opacity duration-300 ${translating ? 'opacity-50' : 'opacity-100'}`}
+                      dangerouslySetInnerHTML={{ __html: (isTranslated ? displayHtml : (displayHtml || reviewModal.data?.correctedHtml || '')) }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleTranslation(); }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center rounded-md border border-purple-500/40 bg-slate-800/70 hover:bg-slate-700/70 shadow-sm transition-colors"
+                      aria-label="Toggle translation"
+                      style={{ padding: '2px' }}
+                    >
+                      <img src={displayFlagSrc} alt="lang" className="h-4 w-6 rounded-sm" />
+                    </button>
+                  </div>
                   {reviewModal.data?.ttsUri && (
                     <div className="mt-3 border-t border-slate-700/60">
                       <audio controls src={reviewModal.data.ttsUri} className="w-full audio-compact" />

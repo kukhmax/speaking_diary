@@ -30,7 +30,8 @@
     "saved_offline": "Saved offline. The entry will sync when connection restores.",
     "transcription_failed": "Transcription failed",
     "transcription_error_prefix": "Transcription error",
-    "transcription_error_hint": "Check backend and Groq API settings."
+    "transcription_error_hint": "Check backend and Groq API settings.",
+    "translation_failed": "Failed to translate text"
   },
   "modals": {
     "new_entry": "New entry",

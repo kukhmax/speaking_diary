@@ -30,7 +30,8 @@
     "saved_offline": "Сохранено офлайн. Запись синхронизируется при восстановлении соединения.",
     "transcription_failed": "Транскрибация не удалась",
     "transcription_error_prefix": "Ошибка транскрибации",
-    "transcription_error_hint": "Проверьте подключение к backend и настройки Groq API."
+    "transcription_error_hint": "Проверьте подключение к backend и настройки Groq API.",
+    "translation_failed": "Не удалось перевести текст"
   },
   "modals": {
     "new_entry": "Новая запись",
