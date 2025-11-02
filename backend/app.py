@@ -686,6 +686,15 @@ def review_entry():
         corrected_html = _highlight_diff(text, corrected) if is_changed else corrected
         explanations = result.get('explanations', [])
         explanations_html = '<br>'.join(explanations) if explanations else ''
+        # Фоллбэк: если Gemini вернул пояснения не на языке интерфейса — переведём на сервере
+        try:
+            base_src = (result.get('language', language) or '').split('-')[0].lower()
+            base_ui = (ui_language or '').split('-')[0].lower()
+            if explanations_html and base_src and base_ui and base_src != base_ui:
+                tr = translate_with_gemini(explanations_html, from_language=result.get('language', language), to_language=ui_language, fmt='html')
+                explanations_html = tr.get('translated_text') or explanations_html
+        except Exception as _ex_tr_err:
+            print(f"[REVIEW] Explanations translate fallback error: {_ex_tr_err}")
         ui_translation = result.get('ui_translation') or ''
         # Server-side TTS for corrected phrase
         tts_data_url = synthesize_tts(corrected, result.get('language', language))
