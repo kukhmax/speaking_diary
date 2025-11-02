@@ -119,6 +119,17 @@ const DiaryApp = () => {
     }
   };
 
+  // Когда открывается модал настроек, убедиться, что pendingLang доступен (не равен текущему)
+  useEffect(() => {
+    if (settingsModal) {
+      const options = ['en','ru','pl','es','pt','fr','de'].filter(c => c !== lang);
+      if (!options.includes(pendingLang)) {
+        setPendingLang(options[0] || (lang === 'en' ? 'ru' : 'en'));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsModal, lang]);
+
   // Fallback: авторизация по токену сессии, переданному через параметр URL (?session=...)
   const tryTelegramSessionAuth = async () => {
     try {
@@ -218,6 +229,8 @@ const DiaryApp = () => {
     if (lower.startsWith('pt')) return 'pt-PT';
     if (lower.startsWith('es')) return 'es-ES';
     if (lower.startsWith('pl')) return 'pl-PL';
+    if (lower.startsWith('fr')) return 'fr-FR';
+    if (lower.startsWith('de')) return 'de-DE';
     if (lower.startsWith('en')) return 'en-US';
     return lang || 'en-US';
   };
@@ -237,7 +250,7 @@ const DiaryApp = () => {
     if (exact) return exact;
     const byBase = voices.find(v => (v.lang || '').toLowerCase().startsWith(base));
     if (byBase) return byBase;
-    const byName = voices.find(v => /\bru\b|russian|русский|\bpt\b|portuguese|português|\bes\b|spanish|español|\bpl\b|polish|polski/i.test((v.name || '') + ' ' + (v.lang || '')));
+    const byName = voices.find(v => /\bru\b|russian|русский|\bpt\b|portuguese|português|\bes\b|spanish|español|\bpl\b|polish|polski|\bfr\b|french|français|\bde\b|german|deutsch/i.test((v.name || '') + ' ' + (v.lang || '')));
     return byName || null;
   };
   const speakText = async (text, lang) => {
@@ -793,7 +806,9 @@ const DiaryApp = () => {
     { code: 'en-US', name: 'English', flagSrc: '/flags/us.svg' },
     { code: 'pt-PT', name: 'Português', flagSrc: '/flags/pt.svg' },
     { code: 'es-ES', name: 'Español', flagSrc: '/flags/es.svg' },
-    { code: 'pl-PL', name: 'Polski', flagSrc: '/flags/pl.svg' }
+    { code: 'pl-PL', name: 'Polski', flagSrc: '/flags/pl.svg' },
+    { code: 'fr-FR', name: 'Français', flagSrc: '/flags/fr.svg' },
+    { code: 'de-DE', name: 'Deutsch', flagSrc: '/flags/de.svg' }
   ];
 
   // --- Translation toggle state for review modal ---
@@ -809,6 +824,16 @@ const DiaryApp = () => {
     const uiCode = uiLocale || 'en-US';
     return getFlagSrc(uiCode);
   };
+
+  // Обновляем выбранный язык записи, если он совпал с текущим языком интерфейса
+  useEffect(() => {
+    const uiBase = (uiLocale || 'en-US').split('-')[0].toLowerCase();
+    if ((selectedLanguage || '').toLowerCase().startsWith(uiBase)) {
+      const fallback = languages.find(l => !l.code.toLowerCase().startsWith(uiBase));
+      if (fallback) setSelectedLanguage(fallback.code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiLocale]);
 
   // Initialize displayed HTML/flag when modal opens or content changes
   useEffect(() => {
@@ -911,7 +936,7 @@ const DiaryApp = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900" dir={dir}>
       <div className="bg-black bg-opacity-30 backdrop-blur-md border-b border-purple-500/20">
-        <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        <div className="max-w-2xl mx-auto px-3 sm:px-4 py-4 sm:py-6 animate-fadeIn" key={lang}>
           <div className="flex items-center justify-between relative">
             <button
               className="flex-1 flex justify-start text-purple-300 hover:text-purple-200"
@@ -1095,9 +1120,13 @@ const DiaryApp = () => {
                     onChange={(e) => setSelectedLanguage(e.target.value)}
                     className="w-full bg-slate-700/50 text-purple-100 rounded-md p-3 border border-purple-500/30"
                   >
-                    {languages.map(l => (
-                      <option key={l.code} value={l.code}>{l.name}</option>
-                    ))}
+                    {(() => {
+                      const uiBase = (uiLocale || 'en-US').split('-')[0].toLowerCase();
+                      const available = languages.filter(l => !l.code.toLowerCase().startsWith(uiBase));
+                      return available.map(l => (
+                        <option key={l.code} value={l.code}>{l.name}</option>
+                      ));
+                    })()}
                   </select>
                 </div>
 
@@ -1271,7 +1300,15 @@ const DiaryApp = () => {
                 <div>
                   <div className="text-sm text-purple-300 mb-2">{t('modals.select_language')}</div>
                   <div className="space-y-2">
-                    {[{ code: 'en', name: 'English', flagSrc: '/flags/us.svg' }, { code: 'ru', name: 'Русский', flagSrc: '/flags/ru.svg' }, { code: 'pl', name: 'Polski', flagSrc: '/flags/pl.svg' }, { code: 'es', name: 'Español', flagSrc: '/flags/es.svg' }, { code: 'pt', name: 'Português', flagSrc: '/flags/pt.svg' }].map((l) => (
+                    {([
+                      { code: 'en', name: 'English', flagSrc: '/flags/us.svg' },
+                      { code: 'ru', name: 'Русский', flagSrc: '/flags/ru.svg' },
+                      { code: 'pl', name: 'Polski', flagSrc: '/flags/pl.svg' },
+                      { code: 'es', name: 'Español', flagSrc: '/flags/es.svg' },
+                      { code: 'pt', name: 'Português', flagSrc: '/flags/pt.svg' },
+                      { code: 'fr', name: 'Français', flagSrc: '/flags/fr.svg' },
+                      { code: 'de', name: 'Deutsch', flagSrc: '/flags/de.svg' },
+                    ].filter(l => l.code !== lang)).map((l) => (
                       <label key={l.code} className="flex items-center gap-3 p-2 rounded-md bg-slate-700/40 border border-purple-500/30 hover:bg-slate-700/60 cursor-pointer">
                         <input
                           type="radio"

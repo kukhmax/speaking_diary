@@ -769,6 +769,10 @@ def _map_tts_lang(language: str) -> str:
         return 'ru'
     if l.startswith('en'):
         return 'en'
+    if l.startswith('fr'):
+        return 'fr'
+    if l.startswith('de'):
+        return 'de'
     if l.startswith('pt'):
         return 'pt'
     if l.startswith('es'):
@@ -832,6 +836,24 @@ def synthesize_tts(text: str, language: str):
             'en-gb': {
                 'voice': 'en-GB-RyanNeural',
                 'backup': ['en-GB-LibbyNeural']
+            },
+            # French (France)
+            'fr': {
+                'voice': 'fr-FR-HenriNeural',
+                'backup': ['fr-FR-DeniseNeural']
+            },
+            'fr-fr': {
+                'voice': 'fr-FR-HenriNeural',
+                'backup': ['fr-FR-DeniseNeural']
+            },
+            # German (Germany)
+            'de': {
+                'voice': 'de-DE-KillianNeural',
+                'backup': ['de-DE-KatjaNeural']
+            },
+            'de-de': {
+                'voice': 'de-DE-KillianNeural',
+                'backup': ['de-DE-KatjaNeural']
             },
             # Spanish (Spain)
             'es': {

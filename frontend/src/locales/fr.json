@@ -1,0 +1,52 @@
+{
+  "header": {
+    "title": "Journal vocal",
+    "subtitle": "Notes vocales pour un journal et l'apprentissage des langues"
+  },
+  "actions": {
+    "create_entry": "Créer une entrée",
+    "no_entries": "Pas encore d'entrées",
+    "click_create_to_start": "Cliquez sur \"Créer une entrée\" pour commencer",
+    "delete_entry_aria": "Supprimer l'entrée",
+    "listen": "Écouter",
+    "delete": "Supprimer",
+    "stop": "Arrêter",
+    "record": "Enregistrer",
+    "save": "Enregistrer",
+    "saving": "Enregistrement...",
+    "transcribing": "Transcription..."
+  },
+  "labels": {
+    "language": "Langue",
+    "text": "Texte",
+    "offline": "Hors ligne"
+  },
+  "placeholders": {
+    "record_or_type": "Cliquez sur enregistrer ou saisissez votre texte..."
+  },
+  "alerts": {
+    "delete_failed": "Impossible de supprimer l'entrée. Vérifiez la connexion.",
+    "mic_failed": "Impossible d'accéder au microphone. Vérifiez les autorisations.",
+    "saved_offline": "Enregistré hors ligne. L'entrée se synchronisera lorsque la connexion sera rétablie.",
+    "transcription_failed": "Échec de la transcription",
+    "transcription_error_prefix": "Erreur de transcription",
+    "transcription_error_hint": "Vérifiez le backend et la configuration de l'API Groq.",
+    "translation_failed": "Échec de la traduction du texte"
+  },
+  "modals": {
+    "new_entry": "Nouvelle entrée",
+    "review_title": "Relecture et corrections",
+    "original_text": "Texte original",
+    "corrected_text": "Texte corrigé",
+    "explanations": "Explications",
+    "tts_title": "Synthèse vocale",
+    "open_explanations_aria": "Ouvrir les explications",
+    "ui_language_title": "Langue de l'interface",
+    "select_language": "Choisir la langue",
+    "close": "Fermer",
+    "apply": "Appliquer"
+  },
+  "tts": {
+    "speak_browser": "Dire (navigateur)"
+  }
+}
