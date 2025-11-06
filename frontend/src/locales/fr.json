@@ -14,7 +14,9 @@
     "record": "Enregistrer",
     "save": "Enregistrer",
     "saving": "Enregistrement...",
-    "transcribing": "Transcription..."
+    "transcribing": "Transcription...",
+    "more_details": "Plus de détails",
+    "more_details_aria": "Ouvrir les détails"
   },
   "labels": {
     "language": "Langue",

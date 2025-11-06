@@ -1068,21 +1068,30 @@ const DiaryApp = () => {
                           </div>
                         </div>
                         <div className="flex items-start gap-2">
-                          <img src={getFlagSrc(entry.language)} alt={entry.language} className="h-4 w-6 rounded-sm border border-purple-500/30 mt-1" />
-                          {entry.textHtml ? (
-                            <div
-                              className="entry-text text-purple-100 leading-relaxed cursor-pointer"
-                              onClick={() => openReview(entry)}
-                              dangerouslySetInnerHTML={{ __html: entry.textHtml }}
-                            />
-                          ) : (
-                            <div
-                              className="text-purple-100 leading-relaxed cursor-pointer"
-                              onClick={() => openReview(entry)}
-                            >
-                              {entry.text}
-                            </div>
-                          )}
+                          <div className="flex items-start gap-2 flex-1">
+                            <img src={getFlagSrc(entry.language)} alt={entry.language} className="h-4 w-6 rounded-sm border border-purple-500/30 mt-1" />
+                            {entry.textHtml ? (
+                              <div
+                                className="entry-text text-purple-100 leading-relaxed cursor-pointer"
+                                onClick={() => openReview(entry)}
+                                dangerouslySetInnerHTML={{ __html: entry.textHtml }}
+                              />
+                            ) : (
+                              <div
+                                className="text-purple-100 leading-relaxed cursor-pointer"
+                                onClick={() => openReview(entry)}
+                              >
+                                {entry.text}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openReview(entry); }}
+                            className="text-xs sm:text-sm px-2 py-1 rounded-md bg-purple-600/80 text-white hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                            aria-label={t('actions.more_details_aria')}
+                          >
+                            {t('actions.more_details')}
+                          </button>
                         </div>
                       </div>
                     ))}

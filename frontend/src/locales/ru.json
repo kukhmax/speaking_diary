@@ -14,7 +14,9 @@
     "record": "Запись",
     "save": "Сохранить",
     "saving": "Сохранение...",
-    "transcribing": "Транскрибация..."
+    "transcribing": "Транскрибация...",
+    "more_details": "Подробнее",
+    "more_details_aria": "Открыть подробности"
   },
   "labels": {
     "language": "Язык",
