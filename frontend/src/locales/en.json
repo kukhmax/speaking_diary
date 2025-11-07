@@ -13,7 +13,7 @@
     "stop": "Stop",
     "record": "Record",
     "save": "Save",
-    "saving": "Saving...",
+    "saving": "Saving and verifying errors...",
     "transcribing": "Transcribing...",
     "more_details": "More details",
     "more_details_aria": "Open details"
