@@ -1105,12 +1105,20 @@ const DiaryApp = () => {
 
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl relative">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.new_entry')}</h2>
                 <button onClick={() => setShowModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
               </div>
+              {isProcessing && (
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-2xl z-10">
+                  <div className="flex items-center gap-3 px-4 py-3 bg-slate-800/80 border border-purple-500/30 rounded-xl text-white">
+                    <div className="w-5 h-5 border-2 border-purple-300 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm">{t('actions.saving')}</span>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-4">
                 <div>
@@ -1202,7 +1210,16 @@ const DiaryApp = () => {
                     disabled={isProcessing || !currentText.trim()}
                     className="px-4 py-2 rounded-md bg-gradient-to-r from-purple-600 to-pink-600 text-white flex items-center gap-2 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50"
                   >
-                    <Save size={18} /> <span>{isProcessing ? t('actions.saving') : t('actions.save')}</span>
+                    {isProcessing ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+                        <span>{t('actions.saving')}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save size={18} /> <span>{t('actions.save')}</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
