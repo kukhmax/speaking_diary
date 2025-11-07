@@ -81,6 +81,20 @@ services:
     profiles:
       - tools  # Запускается только с --profile tools
 
+  # Android Kotlin (сборка APK внутри контейнера)
+  android_build:
+    build:
+      context: ./android_kotlin_app
+      dockerfile: Dockerfile
+    container_name: diary_android_build
+    working_dir: /workspace
+    volumes:
+      - ./android_kotlin_app:/workspace
+    # Команда: собрать и скопировать APK в корень workspace
+    command: bash -lc "gradle assembleDebug && cp app/build/outputs/apk/debug/app-debug.apk /workspace/app-debug.apk"
+    profiles:
+      - android  # Запускается только с --profile android
+
 volumes:
   postgres_data:
     driver: local
