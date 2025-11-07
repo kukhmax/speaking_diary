@@ -14,7 +14,9 @@
     "record": "Record",
     "save": "Save",
     "saving": "Saving...",
-    "transcribing": "Transcribing..."
+    "transcribing": "Transcribing...",
+    "more_details": "More details",
+    "more_details_aria": "Open details"
   },
   "labels": {
     "language": "Language",
@@ -39,6 +41,8 @@
     "original_text": "Original text",
     "corrected_text": "Corrected text",
     "explanations": "Explanations",
+    "original": "Original",
+    "translate": "Translate",
     "tts_title": "TTS audio",
     "open_explanations_aria": "Open explanations",
     "ui_language_title": "Interface language",

@@ -14,7 +14,9 @@
     "record": "Grabar",
     "save": "Guardar",
     "saving": "Guardando...",
-    "transcribing": "Transcribiendo..."
+    "transcribing": "Transcribiendo...",
+    "more_details": "Más detalles",
+    "more_details_aria": "Abrir detalles"
   },
   "labels": {
     "language": "Idioma",
@@ -39,6 +41,8 @@
     "original_text": "Texto original",
     "corrected_text": "Texto corregido",
     "explanations": "Explicaciones",
+    "original": "Original",
+    "translate": "Traducir",
     "tts_title": "Audio TTS",
     "open_explanations_aria": "Abrir explicaciones",
     "ui_language_title": "Idioma de la interfaz",

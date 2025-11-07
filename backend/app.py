@@ -686,6 +686,15 @@ def review_entry():
         corrected_html = _highlight_diff(text, corrected) if is_changed else corrected
         explanations = result.get('explanations', [])
         explanations_html = '<br>'.join(explanations) if explanations else ''
+        # Фоллбэк: если Gemini вернул пояснения не на языке интерфейса — переведём на сервере
+        try:
+            base_src = (result.get('language', language) or '').split('-')[0].lower()
+            base_ui = (ui_language or '').split('-')[0].lower()
+            if explanations_html and base_src and base_ui and base_src != base_ui:
+                tr = translate_with_gemini(explanations_html, from_language=result.get('language', language), to_language=ui_language, fmt='html')
+                explanations_html = tr.get('translated_text') or explanations_html
+        except Exception as _ex_tr_err:
+            print(f"[REVIEW] Explanations translate fallback error: {_ex_tr_err}")
         ui_translation = result.get('ui_translation') or ''
         # Server-side TTS for corrected phrase
         tts_data_url = synthesize_tts(corrected, result.get('language', language))
@@ -769,6 +778,10 @@ def _map_tts_lang(language: str) -> str:
         return 'ru'
     if l.startswith('en'):
         return 'en'
+    if l.startswith('fr'):
+        return 'fr'
+    if l.startswith('de'):
+        return 'de'
     if l.startswith('pt'):
         return 'pt'
     if l.startswith('es'):
@@ -832,6 +845,24 @@ def synthesize_tts(text: str, language: str):
             'en-gb': {
                 'voice': 'en-GB-RyanNeural',
                 'backup': ['en-GB-LibbyNeural']
+            },
+            # French (France)
+            'fr': {
+                'voice': 'fr-FR-HenriNeural',
+                'backup': ['fr-FR-DeniseNeural']
+            },
+            'fr-fr': {
+                'voice': 'fr-FR-HenriNeural',
+                'backup': ['fr-FR-DeniseNeural']
+            },
+            # German (Germany)
+            'de': {
+                'voice': 'de-DE-KillianNeural',
+                'backup': ['de-DE-KatjaNeural']
+            },
+            'de-de': {
+                'voice': 'de-DE-KillianNeural',
+                'backup': ['de-DE-KatjaNeural']
             },
             # Spanish (Spain)
             'es': {

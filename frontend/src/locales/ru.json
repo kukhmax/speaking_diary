@@ -14,7 +14,9 @@
     "record": "Запись",
     "save": "Сохранить",
     "saving": "Сохранение...",
-    "transcribing": "Транскрибация..."
+    "transcribing": "Транскрибация...",
+    "more_details": "Подробнее",
+    "more_details_aria": "Открыть подробности"
   },
   "labels": {
     "language": "Язык",
@@ -39,6 +41,8 @@
     "original_text": "Исходный текст",
     "corrected_text": "Исправленный текст",
     "explanations": "Пояснения",
+    "original": "Оригинал",
+    "translate": "Перевод",
     "tts_title": "Озвучка",
     "open_explanations_aria": "Открыть пояснения",
     "ui_language_title": "Язык интерфейса",

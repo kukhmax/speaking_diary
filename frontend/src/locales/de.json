@@ -1,0 +1,56 @@
+{
+  "header": {
+    "title": "Sprach-Tagebuch",
+    "subtitle": "Sprachnotizen für Tagebuchführung und Sprachenlernen"
+  },
+  "actions": {
+    "create_entry": "Eintrag erstellen",
+    "no_entries": "Noch keine Einträge",
+    "click_create_to_start": "Klicken Sie auf \"Eintrag erstellen\", um zu starten",
+    "delete_entry_aria": "Eintrag löschen",
+    "listen": "Anhören",
+    "delete": "Löschen",
+    "stop": "Stop",
+    "record": "Aufnehmen",
+    "save": "Speichern",
+    "saving": "Speichern...",
+    "transcribing": "Transkribieren...",
+    "more_details": "Mehr Details",
+    "more_details_aria": "Details öffnen"
+  },
+  "labels": {
+    "language": "Sprache",
+    "text": "Text",
+    "offline": "Offline"
+  },
+  "placeholders": {
+    "record_or_type": "Klicken Sie auf Aufnehmen oder geben Sie Ihren Text ein..."
+  },
+  "alerts": {
+    "delete_failed": "Eintrag konnte nicht gelöscht werden. Verbindung prüfen.",
+    "mic_failed": "Mikrofonzugriff nicht möglich. Berechtigungen prüfen.",
+    "saved_offline": "Offline gespeichert. Der Eintrag wird bei bestehender Verbindung synchronisiert.",
+    "transcription_failed": "Transkription fehlgeschlagen",
+    "transcription_error_prefix": "Transkriptionsfehler",
+    "transcription_error_hint": "Backend und Groq API Einstellungen prüfen.",
+    "translation_failed": "Textübersetzung fehlgeschlagen"
+  },
+  "modals": {
+    "new_entry": "Neuer Eintrag",
+    "review_title": "Überprüfung und Korrekturen",
+    "original_text": "Originaltext",
+    "corrected_text": "Korrigierter Text",
+    "explanations": "Erklärungen",
+    "original": "Original",
+    "translate": "Übersetzen",
+    "tts_title": "Sprachausgabe",
+    "open_explanations_aria": "Erklärungen öffnen",
+    "ui_language_title": "Interface-Sprache",
+    "select_language": "Sprache wählen",
+    "close": "Schließen",
+    "apply": "Übernehmen"
+  },
+  "tts": {
+    "speak_browser": "Sprechen (Browser)"
+  }
+}

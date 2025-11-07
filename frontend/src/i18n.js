@@ -4,8 +4,10 @@ import ru from './locales/ru.json';
 import pl from './locales/pl.json';
 import es from './locales/es.json';
 import pt from './locales/pt.json';
+import fr from './locales/fr.json';
+import de from './locales/de.json';
 
-const translations = { en, ru, pl, es, pt };
+const translations = { en, ru, pl, es, pt, fr, de };
 const rtlLangs = ['ar', 'fa', 'he', 'ur'];
 
 const I18nContext = createContext({
@@ -25,7 +27,9 @@ const localeMap = {
   ru: 'ru-RU',
   pl: 'pl-PL',
   es: 'es-ES',
-  pt: 'pt-PT'
+  pt: 'pt-PT',
+  fr: 'fr-FR',
+  de: 'de-DE'
 };
 
 export const I18nProvider = ({ children }) => {
