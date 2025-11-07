@@ -1121,7 +1121,7 @@ const DiaryApp = () => {
                 <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-2xl z-10">
                   <div className="flex items-center gap-3 px-4 py-3 bg-slate-800/80 border border-purple-500/30 rounded-xl text-white">
                     <div className="w-5 h-5 border-2 border-purple-300 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm">{processingMode === 'transcribe' ? t('text_saving') : t('actions.saving')}</span>
+                    <span className="text-sm">{processingMode === 'transcribe' ? t('text_saving') : t('saving')}</span>
                   </div>
                 </div>
               )}
@@ -1219,7 +1219,7 @@ const DiaryApp = () => {
                     {isProcessing ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
-                        <span>{t('actions.saving')}</span>
+                  <span>{t('saving')}</span>
                       </>
                     ) : (
                       <>
