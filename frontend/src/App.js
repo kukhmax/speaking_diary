@@ -12,6 +12,7 @@ const DiaryApp = () => {
   const [currentText, setCurrentText] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('ru-RU');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMode, setProcessingMode] = useState(null); // 'transcribe' | 'save' | null
   const [expandedDates, setExpandedDates] = useState(new Set());
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -615,6 +616,7 @@ const DiaryApp = () => {
 
   const transcribeAudio = async (blob) => {
     setIsProcessing(true);
+    setProcessingMode('transcribe');
     setCurrentText(t('actions.transcribing'));
 
     try {
@@ -650,11 +652,13 @@ const DiaryApp = () => {
       
       setCurrentText(data.text || t('alerts.transcription_failed'));
       setIsProcessing(false);
+      setProcessingMode(null);
 
     } catch (error) {
       console.error('Transcription error:', error);
       setCurrentText(`${t('alerts.transcription_error_prefix')}: ${error.message}. ${t('alerts.transcription_error_hint')}`);
       setIsProcessing(false);
+      setProcessingMode(null);
     }
   };
 
@@ -687,6 +691,7 @@ const DiaryApp = () => {
     if (!currentText.trim()) return;
 
     setIsProcessing(true);
+    setProcessingMode('save');
     const timestamp = new Date().toISOString();
 
     try {
@@ -767,6 +772,7 @@ const DiaryApp = () => {
       setRecordingTime(0);
     } finally {
       setIsProcessing(false);
+      setProcessingMode(null);
     }
   };
 
@@ -1115,7 +1121,7 @@ const DiaryApp = () => {
                 <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-2xl z-10">
                   <div className="flex items-center gap-3 px-4 py-3 bg-slate-800/80 border border-purple-500/30 rounded-xl text-white">
                     <div className="w-5 h-5 border-2 border-purple-300 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm">{t('actions.saving')}</span>
+                    <span className="text-sm">{processingMode === 'transcribe' ? t('text_saving') : t('actions.saving')}</span>
                   </div>
                 </div>
               )}
@@ -1213,7 +1219,7 @@ const DiaryApp = () => {
                     {isProcessing ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
-                        <span>{t('actions.text_saving')}</span>
+                        <span>{t('actions.saving')}</span>
                       </>
                     ) : (
                       <>
