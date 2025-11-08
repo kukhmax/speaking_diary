@@ -1,6 +1,3 @@
-rootProject.name = "SpeakingDiary"
-include(":app")
-
 pluginManagement {
     repositories {
         google()
@@ -8,3 +5,11 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "Voice Diary"
+include(":app")

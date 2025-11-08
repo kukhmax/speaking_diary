@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.SpeakingDiary" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/slate_900</item>
+    </style>
+</resources>

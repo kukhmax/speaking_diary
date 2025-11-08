@@ -1,4 +1,9 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Speaking Diary</string>
+    <string name="record_button">Запись</string>
+    <string name="stop_button">Остановить</string>
+    <string name="save_entry">Сохранить</string>
+    <string name="permission_required">Необходимо разрешение на микрофон</string>
+    <string name="loading">Загрузка...</string>
+    <string name="error_transcription">Ошибка транскрибации</string>
 </resources>
