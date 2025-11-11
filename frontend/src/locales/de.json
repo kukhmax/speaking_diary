@@ -13,7 +13,8 @@
     "stop": "Stop",
     "record": "Aufnehmen",
     "save": "Speichern",
-    "saving": "Speichern...",
+    "text_saving": "Speichern und Überprüfung der Fehler...",
+    "saving": "Speichern und Überprüfung der Fehler...",
     "transcribing": "Transkribieren...",
     "more_details": "Mehr Details",
     "more_details_aria": "Details öffnen"

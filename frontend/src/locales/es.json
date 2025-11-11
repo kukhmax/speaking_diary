@@ -13,7 +13,8 @@
     "stop": "Detener",
     "record": "Grabar",
     "save": "Guardar",
-    "saving": "Guardando...",
+    "text_saving": "Transformación en texto...",
+    "saving": "Guardando y verificando errores...",
     "transcribing": "Transcribiendo...",
     "more_details": "Más detalles",
     "more_details_aria": "Abrir detalles"
