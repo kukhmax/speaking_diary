@@ -37,6 +37,23 @@ const DiaryApp = () => {
   const audioRef = useRef(null);
   const streamRef = useRef(null);
 
+  // Close modals on Esc key
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (settingsModal) { setSettingsModal(false); return; }
+        if (explainModal.visible) { setExplainModal({ visible: false, html: '' }); return; }
+        if (audioModal.visible) { setAudioModal({ visible: false, src: null, title: '' }); return; }
+        if (reviewModal.visible) { setReviewModal({ visible: false, data: null }); return; }
+        if (showModal) { setShowModal(false); return; }
+      }
+    };
+    if (showModal || reviewModal.visible || audioModal.visible || settingsModal || explainModal.visible) {
+      window.addEventListener('keydown', onKeyDown);
+      return () => window.removeEventListener('keydown', onKeyDown);
+    }
+  }, [showModal, reviewModal.visible, audioModal.visible, settingsModal, explainModal.visible]);
+
   // Authentication helpers (multi-account)
   const loadAccounts = () => {
     try { return JSON.parse(localStorage.getItem('auth_accounts') || '{}'); } catch { return {}; }
@@ -1041,9 +1058,10 @@ const DiaryApp = () => {
                 </button>
                 
                 {expandedDates.has(date) && (
-                  <div className="border-t border-purple-500/20 divide-y divide-purple-500/10">
-                    {dateEntries.map((entry) => (
-                      <div key={entry.id} className="px-4 py-3 hover:bg-purple-500/5">
+                  <div className="border-t border-purple-500/20">
+                    <div className="divide-y divide-purple-500/10 max-h-[60vh] overflow-y-auto scroll-smooth overscroll-contain">
+                      {dateEntries.map((entry) => (
+                        <div key={entry.id} className="px-4 py-3 hover:bg-purple-500/5">
                         <div className="flex justify-between items-start mb-1">
                           <div className="flex items-center gap-2">
                             <div className="text-sm text-purple-400/60">
@@ -1102,6 +1120,7 @@ const DiaryApp = () => {
                       </div>
                     ))}
                   </div>
+                  </div>
                 )}
               </div>
             ))
@@ -1110,9 +1129,13 @@ const DiaryApp = () => {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl relative">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl relative flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.new_entry')}</h2>
                 <button onClick={() => setShowModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
@@ -1235,9 +1258,13 @@ const DiaryApp = () => {
       )}
 
       {reviewModal.visible && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeReviewModal(); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.review_title')}</h2>
                 <button onClick={closeReviewModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
@@ -1313,9 +1340,13 @@ const DiaryApp = () => {
       )}
 
       {audioModal.visible && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl" role="dialog" aria-modal="true">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeAudioModal(); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{audioModal.title || t('modals.tts_title')}</h2>
                 <button onClick={closeAudioModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
@@ -1327,9 +1358,13 @@ const DiaryApp = () => {
       )}
 
       {settingsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70]">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70]"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setSettingsModal(false); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.ui_language_title')}</h2>
                 <button onClick={() => setSettingsModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
@@ -1387,9 +1422,13 @@ const DiaryApp = () => {
       )}
 
       {explainModal.visible && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl" role="dialog" aria-modal="true">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeExplainModal(); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.explanations')}</h2>
                 <button onClick={closeExplainModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
