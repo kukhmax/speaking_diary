@@ -597,6 +597,10 @@ const DiaryApp = () => {
       };
 
       mediaRecorder.onstop = async () => {
+        // гарантируем корректное состояние UI
+        setIsRecording(false);
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        if (autoStopRef.current) { clearTimeout(autoStopRef.current); autoStopRef.current = null; }
         setTimeout(async () => {
           const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
           setAudioBlob(blob);
@@ -727,6 +731,7 @@ const DiaryApp = () => {
     }
     setAudioBlob(null);
     setIsPlaying(false);
+    setIsRecording(false);
     setRecordingTime(0);
   };
 
