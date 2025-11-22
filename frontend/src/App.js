@@ -727,7 +727,6 @@ const DiaryApp = () => {
     }
     setAudioBlob(null);
     setIsPlaying(false);
-    setCurrentText('');
     setRecordingTime(0);
   };
 
@@ -1226,28 +1225,30 @@ const DiaryApp = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    {isRecording ? (
-                      <button
-                        onClick={stopRecording}
-                        className="px-4 py-2 rounded-md bg-red-600 text-white flex items-center gap-2 hover:bg-red-700"
-                      >
-                        <Square size={18} /> <span className="hidden sm:inline">{t('actions.stop')}</span>
-                        <span className="sr-only">{t('actions.stop')}</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={startRecording}
-                        className="px-4 py-2 rounded-md bg-purple-600 text-white flex items-center gap-2 hover:bg-purple-700"
-                      >
-                        <Mic size={18} /> <span className="hidden sm:inline">{t('actions.record')}</span>
-                        <span className="sr-only">{t('actions.record')}</span>
-                      </button>
-                    )}
-                    <span className={`text-sm sm:text-base ${isRecording ? 'text-pink-300' : 'text-purple-300'}`}>
-                      {formatTime(Math.max(0, MAX_RECORD_SECONDS - recordingTime))}
-                    </span>
-                  </div>
+                  {(!audioBlob || isRecording) && (
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      {isRecording ? (
+                        <button
+                          onClick={stopRecording}
+                          className="px-4 py-2 rounded-md bg-red-600 text-white flex items-center gap-2 hover:bg-red-700"
+                        >
+                          <Square size={18} /> <span className="hidden sm:inline">{t('actions.stop')}</span>
+                          <span className="sr-only">{t('actions.stop')}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={startRecording}
+                          className="px-4 py-2 rounded-md bg-purple-600 text-white flex items-center gap-2 hover:bg-purple-700"
+                        >
+                          <Mic size={18} /> <span className="hidden sm:inline">{t('actions.record')}</span>
+                          <span className="sr-only">{t('actions.record')}</span>
+                        </button>
+                      )}
+                      <span className={`text-sm sm:text-base ${isRecording ? 'text-pink-300' : 'text-purple-300'}`}>
+                        {formatTime(Math.max(0, MAX_RECORD_SECONDS - recordingTime))}
+                      </span>
+                    </div>
+                  )}
 
                   {audioBlob && (
                     <div className="flex items-center gap-2">
