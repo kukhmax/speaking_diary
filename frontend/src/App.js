@@ -36,6 +36,7 @@ const DiaryApp = () => {
   const timerRef = useRef(null);
   const audioRef = useRef(null);
   const streamRef = useRef(null);
+  const MAX_RECORD_SECONDS = 20;
 
   // Close modals on Esc key
   useEffect(() => {
@@ -610,7 +611,17 @@ const DiaryApp = () => {
       setRecordingTime(0);
 
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime(prev => {
+          const next = prev + 1;
+          if (next >= MAX_RECORD_SECONDS) {
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            stopRecording();
+          }
+          return next;
+        });
       }, 1000);
 
     } catch (error) {
@@ -1196,6 +1207,9 @@ const DiaryApp = () => {
                       </button>
                     )}
                     <span className="text-purple-300 text-sm sm:text-base">{formatTime(recordingTime)}</span>
+                    <span className={`text-sm sm:text-base ${isRecording ? 'text-pink-300' : 'text-purple-300'}`}>
+                      {formatTime(Math.max(0, MAX_RECORD_SECONDS - recordingTime))}
+                    </span>
                   </div>
 
                   {audioBlob && (
