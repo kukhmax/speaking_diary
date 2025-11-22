@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Trash2, MoreVertical } from 'lucide-react';
+import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Pause, Trash2, MoreVertical } from 'lucide-react';
 import { useI18n } from './i18n';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -36,6 +36,7 @@ const DiaryApp = () => {
   const timerRef = useRef(null);
   const audioRef = useRef(null);
   const streamRef = useRef(null);
+  const audioUrlRef = useRef(null);
   const MAX_RECORD_SECONDS = 20;
 
   // Close modals on Esc key
@@ -693,13 +694,17 @@ const DiaryApp = () => {
   const playAudio = () => {
     if (audioBlob && !isPlaying) {
       const url = URL.createObjectURL(audioBlob);
+      audioUrlRef.current = url;
       audioRef.current = new Audio(url);
       audioRef.current.play();
       setIsPlaying(true);
 
       audioRef.current.onended = () => {
         setIsPlaying(false);
-        URL.revokeObjectURL(url);
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current);
+          audioUrlRef.current = null;
+        }
       };
     }
   };
@@ -709,10 +714,36 @@ const DiaryApp = () => {
       audioRef.current.pause();
       audioRef.current = null;
     }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
     setAudioBlob(null);
     setIsPlaying(false);
     setCurrentText('');
     setRecordingTime(0);
+  };
+
+  const pauseAudio = () => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    } catch {}
+  };
+
+  const stopPlayback = () => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
+    } catch {}
+    setIsPlaying(false);
   };
 
   const saveEntry = async () => {
@@ -1206,7 +1237,6 @@ const DiaryApp = () => {
                         <span className="sr-only">{t('actions.record')}</span>
                       </button>
                     )}
-                    <span className="text-purple-300 text-sm sm:text-base">{formatTime(recordingTime)}</span>
                     <span className={`text-sm sm:text-base ${isRecording ? 'text-pink-300' : 'text-purple-300'}`}>
                       {formatTime(Math.max(0, MAX_RECORD_SECONDS - recordingTime))}
                     </span>
@@ -1214,24 +1244,49 @@ const DiaryApp = () => {
 
                   {audioBlob && (
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={playAudio}
-                        className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
-                        aria-label={t('actions.listen')}
-                      >
-                        <Play size={18} />
-                        <span className="hidden sm:inline">{t('actions.listen')}</span>
-                        <span className="sr-only">{t('actions.listen')}</span>
-                      </button>
-                      <button
-                        onClick={deleteAudio}
-                        className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
-                        aria-label={t('actions.delete')}
-                      >
-                        <Trash2 size={18} />
-                        <span className="hidden sm:inline">{t('actions.delete')}</span>
-                        <span className="sr-only">{t('actions.delete')}</span>
-                      </button>
+                      {isPlaying ? (
+                        <>
+                          <button
+                            onClick={() => pauseAudio()}
+                            className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                            aria-label={t('actions.pause')}
+                          >
+                            <Pause size={18} />
+                            <span className="hidden sm:inline">{t('actions.pause')}</span>
+                            <span className="sr-only">{t('actions.pause')}</span>
+                          </button>
+                          <button
+                            onClick={() => stopPlayback()}
+                            className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                            aria-label={t('actions.stop')}
+                          >
+                            <Square size={18} />
+                            <span className="hidden sm:inline">{t('actions.stop')}</span>
+                            <span className="sr-only">{t('actions.stop')}</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={playAudio}
+                            className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                            aria-label={t('actions.listen')}
+                          >
+                            <Play size={18} />
+                            <span className="hidden sm:inline">{t('actions.listen')}</span>
+                            <span className="sr-only">{t('actions.listen')}</span>
+                          </button>
+                          <button
+                            onClick={deleteAudio}
+                            className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                            aria-label={t('actions.delete')}
+                          >
+                            <Trash2 size={18} />
+                            <span className="hidden sm:inline">{t('actions.delete')}</span>
+                            <span className="sr-only">{t('actions.delete')}</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
