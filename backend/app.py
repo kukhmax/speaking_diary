@@ -1013,7 +1013,7 @@ def review_with_gemini(text: str, language: str, ui_language: str = 'ru'):
             'ui_translation': ''
         }
     try:
-        model_candidates = ['gemini-1.5-pro-latest', 'gemini-1.5-pro', 'gemini-2.5-flash-latest', 'gemini-2.5-flash']
+        model_candidates = ['gemini-3-pro-preview', 'gemini-2.5-flash-latest', 'gemini-2.5-flash']
         last_err = None
         for model_name in model_candidates:
             try:
