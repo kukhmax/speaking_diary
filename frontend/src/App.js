@@ -37,6 +37,7 @@ const DiaryApp = () => {
   const audioRef = useRef(null);
   const streamRef = useRef(null);
   const audioUrlRef = useRef(null);
+  const autoStopRef = useRef(null);
   const MAX_RECORD_SECONDS = 20;
 
   // Close modals on Esc key
@@ -596,15 +597,14 @@ const DiaryApp = () => {
       };
 
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-        }
-
-        // Автоматическая транскрибация
-        await transcribeAudio(blob);
+        setTimeout(async () => {
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          setAudioBlob(blob);
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+          }
+          await transcribeAudio(blob);
+        }, 0);
       };
 
       mediaRecorder.start();
@@ -625,6 +625,10 @@ const DiaryApp = () => {
         });
       }, 1000);
 
+      autoStopRef.current = setTimeout(() => {
+        stopRecording();
+      }, MAX_RECORD_SECONDS * 1000);
+
     } catch (error) {
       console.error('Error accessing microphone:', error);
       alert(t('alerts.mic_failed'));
@@ -632,15 +636,18 @@ const DiaryApp = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
+    if (autoStopRef.current) {
+      clearTimeout(autoStopRef.current);
+      autoStopRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (isRecording) setIsRecording(false);
   };
 
   const transcribeAudio = async (blob) => {
