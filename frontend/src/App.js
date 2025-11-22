@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Trash2, MoreVertical } from 'lucide-react';
+import { Mic, Save, X, Plus, ChevronDown, ChevronRight, Square, Play, Pause, Trash2, MoreVertical } from 'lucide-react';
 import { useI18n } from './i18n';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
@@ -36,6 +36,26 @@ const DiaryApp = () => {
   const timerRef = useRef(null);
   const audioRef = useRef(null);
   const streamRef = useRef(null);
+  const audioUrlRef = useRef(null);
+  const autoStopRef = useRef(null);
+  const MAX_RECORD_SECONDS = 20;
+
+  // Close modals on Esc key
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (settingsModal) { setSettingsModal(false); return; }
+        if (explainModal.visible) { setExplainModal({ visible: false, html: '' }); return; }
+        if (audioModal.visible) { setAudioModal({ visible: false, src: null, title: '' }); return; }
+        if (reviewModal.visible) { setReviewModal({ visible: false, data: null }); return; }
+        if (showModal) { setShowModal(false); return; }
+      }
+    };
+    if (showModal || reviewModal.visible || audioModal.visible || settingsModal || explainModal.visible) {
+      window.addEventListener('keydown', onKeyDown);
+      return () => window.removeEventListener('keydown', onKeyDown);
+    }
+  }, [showModal, reviewModal.visible, audioModal.visible, settingsModal, explainModal.visible]);
 
   // Authentication helpers (multi-account)
   const loadAccounts = () => {
@@ -577,15 +597,18 @@ const DiaryApp = () => {
       };
 
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-        }
-
-        // Автоматическая транскрибация
-        await transcribeAudio(blob);
+        // гарантируем корректное состояние UI
+        setIsRecording(false);
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        if (autoStopRef.current) { clearTimeout(autoStopRef.current); autoStopRef.current = null; }
+        setTimeout(async () => {
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          setAudioBlob(blob);
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+          }
+          await transcribeAudio(blob);
+        }, 0);
       };
 
       mediaRecorder.start();
@@ -593,8 +616,22 @@ const DiaryApp = () => {
       setRecordingTime(0);
 
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime(prev => {
+          const next = prev + 1;
+          if (next >= MAX_RECORD_SECONDS) {
+            if (timerRef.current) {
+              clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            stopRecording();
+          }
+          return next;
+        });
       }, 1000);
+
+      autoStopRef.current = setTimeout(() => {
+        stopRecording();
+      }, MAX_RECORD_SECONDS * 1000);
 
     } catch (error) {
       console.error('Error accessing microphone:', error);
@@ -603,15 +640,18 @@ const DiaryApp = () => {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
+    if (autoStopRef.current) {
+      clearTimeout(autoStopRef.current);
+      autoStopRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (isRecording) setIsRecording(false);
   };
 
   const transcribeAudio = async (blob) => {
@@ -665,13 +705,17 @@ const DiaryApp = () => {
   const playAudio = () => {
     if (audioBlob && !isPlaying) {
       const url = URL.createObjectURL(audioBlob);
+      audioUrlRef.current = url;
       audioRef.current = new Audio(url);
       audioRef.current.play();
       setIsPlaying(true);
 
       audioRef.current.onended = () => {
         setIsPlaying(false);
-        URL.revokeObjectURL(url);
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current);
+          audioUrlRef.current = null;
+        }
       };
     }
   };
@@ -681,10 +725,36 @@ const DiaryApp = () => {
       audioRef.current.pause();
       audioRef.current = null;
     }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
     setAudioBlob(null);
     setIsPlaying(false);
-    setCurrentText('');
+    setIsRecording(false);
     setRecordingTime(0);
+  };
+
+  const pauseAudio = () => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    } catch {}
+  };
+
+  const stopPlayback = () => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
+    } catch {}
+    setIsPlaying(false);
   };
 
   const saveEntry = async () => {
@@ -1041,9 +1111,10 @@ const DiaryApp = () => {
                 </button>
                 
                 {expandedDates.has(date) && (
-                  <div className="border-t border-purple-500/20 divide-y divide-purple-500/10">
-                    {dateEntries.map((entry) => (
-                      <div key={entry.id} className="px-4 py-3 hover:bg-purple-500/5">
+                  <div className="border-t border-purple-500/20">
+                    <div className="divide-y divide-purple-500/10 max-h-[60vh] overflow-y-auto scroll-smooth overscroll-contain">
+                      {dateEntries.map((entry) => (
+                        <div key={entry.id} className="px-4 py-3 hover:bg-purple-500/5">
                         <div className="flex justify-between items-start mb-1">
                           <div className="flex items-center gap-2">
                             <div className="text-sm text-purple-400/60">
@@ -1102,6 +1173,7 @@ const DiaryApp = () => {
                       </div>
                     ))}
                   </div>
+                  </div>
                 )}
               </div>
             ))
@@ -1110,9 +1182,13 @@ const DiaryApp = () => {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl relative">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl relative flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.new_entry')}</h2>
                 <button onClick={() => setShowModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
@@ -1154,47 +1230,76 @@ const DiaryApp = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    {isRecording ? (
-                      <button
-                        onClick={stopRecording}
-                        className="px-4 py-2 rounded-md bg-red-600 text-white flex items-center gap-2 hover:bg-red-700"
-                      >
-                        <Square size={18} /> <span className="hidden sm:inline">{t('actions.stop')}</span>
-                        <span className="sr-only">{t('actions.stop')}</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={startRecording}
-                        className="px-4 py-2 rounded-md bg-purple-600 text-white flex items-center gap-2 hover:bg-purple-700"
-                      >
-                        <Mic size={18} /> <span className="hidden sm:inline">{t('actions.record')}</span>
-                        <span className="sr-only">{t('actions.record')}</span>
-                      </button>
-                    )}
-                    <span className="text-purple-300 text-sm sm:text-base">{formatTime(recordingTime)}</span>
-                  </div>
+                  {(!audioBlob || isRecording) && (
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      {isRecording ? (
+                        <button
+                          onClick={stopRecording}
+                          className="px-4 py-2 rounded-md bg-red-600 text-white flex items-center gap-2 hover:bg-red-700"
+                        >
+                          <Square size={18} /> <span className="hidden sm:inline">{t('actions.stop')}</span>
+                          <span className="sr-only">{t('actions.stop')}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={startRecording}
+                          className="px-4 py-2 rounded-md bg-purple-600 text-white flex items-center gap-2 hover:bg-purple-700"
+                        >
+                          <Mic size={18} /> <span className="hidden sm:inline">{t('actions.record')}</span>
+                          <span className="sr-only">{t('actions.record')}</span>
+                        </button>
+                      )}
+                      <span className={`text-sm sm:text-base ${isRecording ? 'text-pink-300' : 'text-purple-300'}`}>
+                        {formatTime(Math.max(0, MAX_RECORD_SECONDS - recordingTime))}
+                      </span>
+                    </div>
+                  )}
 
                   {audioBlob && (
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={playAudio}
-                        className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
-                        aria-label={t('actions.listen')}
-                      >
-                        <Play size={18} />
-                        <span className="hidden sm:inline">{t('actions.listen')}</span>
-                        <span className="sr-only">{t('actions.listen')}</span>
-                      </button>
-                      <button
-                        onClick={deleteAudio}
-                        className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
-                        aria-label={t('actions.delete')}
-                      >
-                        <Trash2 size={18} />
-                        <span className="hidden sm:inline">{t('actions.delete')}</span>
-                        <span className="sr-only">{t('actions.delete')}</span>
-                      </button>
+                      {isPlaying ? (
+                        <>
+                          <button
+                            onClick={() => pauseAudio()}
+                            className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                            aria-label={t('actions.pause')}
+                          >
+                            <Pause size={18} />
+                            <span className="hidden sm:inline">{t('actions.pause')}</span>
+                            <span className="sr-only">{t('actions.pause')}</span>
+                          </button>
+                          <button
+                            onClick={() => stopPlayback()}
+                            className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                            aria-label={t('actions.stop')}
+                          >
+                            <Square size={18} />
+                            <span className="hidden sm:inline">{t('actions.stop')}</span>
+                            <span className="sr-only">{t('actions.stop')}</span>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={playAudio}
+                            className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                            aria-label={t('actions.listen')}
+                          >
+                            <Play size={18} />
+                            <span className="hidden sm:inline">{t('actions.listen')}</span>
+                            <span className="sr-only">{t('actions.listen')}</span>
+                          </button>
+                          <button
+                            onClick={deleteAudio}
+                            className="px-3 py-2 rounded-md bg-slate-700/50 text-purple-100 flex items-center gap-2 border border-purple-500/30 hover:bg-slate-700"
+                            aria-label={t('actions.delete')}
+                          >
+                            <Trash2 size={18} />
+                            <span className="hidden sm:inline">{t('actions.delete')}</span>
+                            <span className="sr-only">{t('actions.delete')}</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1235,9 +1340,13 @@ const DiaryApp = () => {
       )}
 
       {reviewModal.visible && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeReviewModal(); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.review_title')}</h2>
                 <button onClick={closeReviewModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
@@ -1313,9 +1422,13 @@ const DiaryApp = () => {
       )}
 
       {audioModal.visible && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl" role="dialog" aria-modal="true">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeAudioModal(); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{audioModal.title || t('modals.tts_title')}</h2>
                 <button onClick={closeAudioModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
@@ -1327,9 +1440,13 @@ const DiaryApp = () => {
       )}
 
       {settingsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70]">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[70]"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setSettingsModal(false); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.ui_language_title')}</h2>
                 <button onClick={() => setSettingsModal(false)} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
@@ -1387,9 +1504,13 @@ const DiaryApp = () => {
       )}
 
       {explainModal.visible && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl" role="dialog" aria-modal="true">
-            <div className="p-6">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-[60]"
+          role="dialog" aria-modal="true"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeExplainModal(); }}
+        >
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="p-6 overflow-y-auto scroll-smooth overscroll-contain">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl sm:text-2xl font-bold text-purple-200">{t('modals.explanations')}</h2>
                 <button onClick={closeExplainModal} className="text-purple-400 hover:text-purple-300"><X size={24} /></button>
